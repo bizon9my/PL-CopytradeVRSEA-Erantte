@@ -1,0 +1,408 @@
+import React, { useState, useEffect } from 'react';
+import { Wallet, TrendingUp, Calendar, Settings, Lock, Unlock, RefreshCw, ChevronLeft, ChevronRight, BarChart3, Building2 } from 'lucide-react';
+
+// URL Google Apps Script baharu anda yang telah dihubungkan
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyScZPgtCs_XlRkYNxfz9iMVWHD_hRrZlkWGQZuE_biAKLFeqwxC4OvA_mDsDh9MAoD/exec"; 
+
+const App = () => {
+  const [data, setData] = useState([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [editingItem, setEditingItem] = useState(null);
+  const [editForm, setEditForm] = useState({ pl: '', percent: '' });
+  
+  const [equity, setEquity] = useState(1000);
+  const [month, setMonth] = useState('February');
+  const [year, setYear] = useState(2025);
+  const [currency, setCurrency] = useState('USD');
+  const [broker, setBroker] = useState('VRS Broker');
+  
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({ month: 'February', year: 2025, currency: 'USD', equity: 1000, broker: 'VRS Broker' });
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [syncStatus, setSyncStatus] = useState('');
+
+  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  const getDaysInMonth = (monthName, yearNum) => {
+    try {
+      const monthIndex = new Date(`${monthName} 1, ${yearNum}`).getMonth();
+      return new Date(yearNum, monthIndex + 1, 0).getDate();
+    } catch (e) { return 31; }
+  };
+
+  const getStartDayOfMonth = (monthName, yearNum) => {
+    try {
+      return new Date(`${monthName} 1, ${yearNum}`).getDay();
+    } catch (e) { return 0; }
+  };
+
+  const totalPL = data.reduce((sum, item) => sum + (item.pl || 0), 0);
+  const totalPercent = equity > 0 ? (totalPL / equity) * 100 : 0;
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = () => {
+    if (!SCRIPT_URL) return;
+    setIsLoading(true);
+    setSyncStatus('Syncing Terminal...');
+    
+    fetch(SCRIPT_URL + "?timestamp=" + new Date().getTime())
+      .then(res => res.json())
+      .then(result => {
+        if (result.data) {
+          const sortedData = result.data
+            .filter(item => item.date !== null && item.date !== "")
+            .sort((a, b) => parseInt(a.date) - parseInt(b.date));
+          setData(sortedData); 
+        }
+        if (result.settings) {
+          setEquity(parseFloat(result.settings.equity) || 1000);
+          setMonth(result.settings.month || 'February');
+          setYear(parseInt(result.settings.year) || 2025);
+          setCurrency(result.settings.currency || 'USD');
+          setBroker(result.settings.broker || 'VRS Broker');
+        }
+        setIsLoading(false);
+        setSyncStatus('Terminal Live ✅');
+        setTimeout(() => setSyncStatus(''), 3000);
+      })
+      .catch(err => {
+        setSyncStatus('Connection Error ❌');
+        setIsLoading(false);
+      });
+  };
+
+  const formatValue = (value) => {
+    if (value === null || value === '' || isNaN(value)) return null;
+    const num = parseFloat(value);
+    if (num === 0) return '+0.00';
+    return (num > 0 ? '+' : '') + num.toFixed(2);
+  };
+
+  const getColorClass = (value) => {
+    if (value === null || value === 0 || value === '' || isNaN(value)) return 'text-zinc-500';
+    const num = parseFloat(value);
+    if (num > 0) return 'text-[#00ffa3] drop-shadow-[0_0_8px_rgba(0,255,163,0.3)]';
+    return 'text-[#ff3b69] drop-shadow-[0_0_8px_rgba(255,59,105,0.3)]';
+  };
+
+  const sendToGas = async (payload) => {
+    setSyncStatus('Updating Cloud...');
+    try {
+      await fetch(SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload)
+      });
+      setSyncStatus('Execution Success ✅');
+      setTimeout(() => setSyncStatus(''), 3000);
+      return true;
+    } catch (err) {
+      setSyncStatus('Update Failed ❌');
+      return false;
+    }
+  };
+
+  const handleAdminLoginClick = () => {
+    if (isAdmin) setIsAdmin(false);
+    else setShowLoginModal(true);
+  };
+
+  const handleLoginSubmit = () => {
+    if (passwordInput === "admin123") {
+      setIsAdmin(true);
+      setShowLoginModal(false);
+    } else {
+      setLoginError("Invalid Access Key");
+    }
+  };
+
+  const handleDayClick = (item) => {
+    if (!isAdmin) return;
+    setEditingItem(item);
+    setEditForm({
+      pl: item.pl !== null ? item.pl : '',
+      percent: item.percent !== null ? item.percent : ''
+    });
+  };
+
+  const handleSaveDay = async () => {
+    const plVal = editForm.pl === '' ? null : parseFloat(editForm.pl);
+    const pctVal = editForm.percent === '' ? null : parseFloat(editForm.percent);
+    const newData = data.map(d => d.date === editingItem.date ? { ...d, pl: plVal, percent: pctVal } : d);
+    setData(newData);
+    setEditingItem(null);
+    await sendToGas({ action: 'updateDay', date: editingItem.date, pl: plVal, percent: pctVal });
+  };
+
+  const handleSaveSettings = async () => {
+    const newEquity = parseFloat(settingsForm.equity) || 0;
+    const newYear = parseInt(settingsForm.year) || 2025;
+    
+    setEquity(newEquity);
+    setMonth(settingsForm.month);
+    setYear(newYear);
+    setCurrency(settingsForm.currency);
+    setBroker(settingsForm.broker);
+    setShowSettingsModal(false);
+
+    await sendToGas({ 
+      action: 'updateSettings', 
+      equity: newEquity, 
+      month: settingsForm.month, 
+      year: newYear, 
+      currency: settingsForm.currency,
+      broker: settingsForm.broker
+    });
+  };
+
+  const startDay = getStartDayOfMonth(month, year);
+  const totalDays = getDaysInMonth(month, year);
+  const calendarGrid = [];
+  for (let i = 0; i < startDay; i++) calendarGrid.push({ isBlank: true });
+  for (let i = 1; i <= totalDays; i++) {
+    const dayData = data.find(d => parseInt(d.date) === i) || { date: i, pl: null, percent: null };
+    calendarGrid.push({ ...dayData, isBlank: false });
+  }
+
+  return (
+    <div className="min-h-screen bg-[#050505] flex items-center justify-center p-4 font-sans text-white selection:bg-[#00ffa3]/30">
+      
+      {/* Background Glows */}
+      <div className="fixed top-[-10%] left-[-10%] w-[40%] h-[40%] bg-[#00ffa3]/5 blur-[120px] rounded-full pointer-events-none"></div>
+      <div className="fixed bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-[#ff3b69]/5 blur-[120px] rounded-full pointer-events-none"></div>
+
+      <div className="bg-[#0f0f11] w-full max-w-[440px] rounded-[32px] overflow-hidden border border-white/5 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.8)] relative">
+        
+        {/* Header Terminal */}
+        <div className="bg-[#16161a] p-6 border-b border-white/5 relative">
+          <div className="flex justify-between items-center mb-6">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-[#00ffa3] animate-pulse"></div>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-bold">VRS EA Terminal</span>
+            </div>
+            <div className="flex gap-2">
+              {isAdmin && (
+                <button onClick={() => { setSettingsForm({ month, year, currency, equity, broker }); setShowSettingsModal(true); }} className="p-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors text-zinc-400">
+                  <Settings size={14} />
+                </button>
+              )}
+              <button onClick={handleAdminLoginClick} className={`p-2 rounded-lg transition-all ${isAdmin ? 'bg-[#ff3b69]/20 text-[#ff3b69]' : 'bg-white/5 text-zinc-500 hover:text-white'}`}>
+                {isAdmin ? <Unlock size={14} /> : <Lock size={14} />}
+              </button>
+            </div>
+          </div>
+
+          <h1 className="text-xl font-bold bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent mb-1 uppercase tracking-tight">
+            Laporan Prestasi Harian
+          </h1>
+          <p className="text-xs text-zinc-500 font-medium flex items-center gap-1.5">
+            <Building2 size={12} className="text-zinc-600" />
+            Broker: <span className="text-[#00ffa3] font-bold">{broker}</span>
+          </p>
+        </div>
+
+        <div className="p-6">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 gap-4 mb-8">
+            <div className="bg-[#16161a] rounded-2xl p-5 border border-white/5 flex items-center justify-between group hover:border-[#00ffa3]/30 transition-all">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-xl bg-[#00ffa3]/10 flex items-center justify-center text-[#00ffa3]">
+                  <Wallet size={22} />
+                </div>
+                <div>
+                  <div className="text-[11px] uppercase tracking-widest text-zinc-500 font-bold mb-0.5">Total Equity</div>
+                  <div className="text-2xl font-bold tracking-tight">{equity.toLocaleString()} <span className="text-sm font-normal text-zinc-600">{currency}</span></div>
+                </div>
+              </div>
+              <BarChart3 size={20} className="text-zinc-800 group-hover:text-zinc-700 transition-colors" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-[#16161a] rounded-2xl p-4 border border-white/5">
+                <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1 flex items-center gap-1.5">
+                  <TrendingUp size={10} /> {month.substring(0,3)} P/L
+                </div>
+                <div className={`text-xl font-bold ${getColorClass(totalPL)}`}>{formatValue(totalPL)}</div>
+              </div>
+              <div className="bg-[#16161a] rounded-2xl p-4 border border-white/5">
+                <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold mb-1">Return Rate</div>
+                <div className={`text-xl font-bold ${getColorClass(totalPercent)}`}>{formatValue(totalPercent)}%</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Calendar Header */}
+          <div className="flex justify-between items-center mb-6 px-1">
+            <div className="flex items-center gap-2">
+              <Calendar size={16} className="text-[#00ffa3]" />
+              <span className="text-sm font-bold tracking-wide">{month} {year}</span>
+            </div>
+            {syncStatus && (
+              <span className="text-[10px] font-bold text-[#00ffa3] bg-[#00ffa3]/10 px-2.5 py-1 rounded-full border border-[#00ffa3]/20">
+                {syncStatus}
+              </span>
+            )}
+          </div>
+
+          {/* Day Labels */}
+          <div className="grid grid-cols-7 mb-4 border-b border-white/5 pb-2">
+            {daysOfWeek.map(day => (
+              <div key={day} className="text-center text-[10px] font-black text-zinc-600 uppercase tracking-tighter">{day}</div>
+            ))}
+          </div>
+
+          {/* Calendar Grid */}
+          <div className="grid grid-cols-7 gap-y-4 gap-x-1">
+            {calendarGrid.map((item, index) => (
+              <div 
+                key={index} 
+                onClick={() => !item.isBlank && handleDayClick(item)}
+                className={`flex flex-col items-center justify-start h-14 transition-all relative rounded-xl border border-transparent ${!item.isBlank && isAdmin ? 'cursor-pointer hover:bg-white/5 hover:border-white/10 active:scale-95' : ''}`}
+              >
+                {!item.isBlank ? (
+                  <>
+                    <span className={`text-[13px] font-bold mb-1.5 ${item.pl !== null ? 'text-white' : 'text-zinc-600'}`}>{item.date}</span>
+                    {item.pl !== null && (
+                      <div className="flex flex-col items-center leading-none gap-0.5">
+                        <span className={`text-[9px] font-black tracking-tighter ${getColorClass(item.pl)} uppercase`}>
+                          {item.pl > 0 ? 'Win' : 'Loss'}
+                        </span>
+                        <span className={`text-[10px] font-bold ${getColorClass(item.pl)}`}>
+                          {formatValue(item.pl)}
+                        </span>
+                      </div>
+                    )}
+                  </>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Footer Info */}
+        <div className="p-4 bg-white/5 border-t border-white/5 text-center">
+          <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-[0.3em]">VRS EA EA Reporting System • Secured</p>
+        </div>
+      </div>
+
+      {/* Login Modal */}
+      {showLoginModal && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50 backdrop-blur-md">
+          <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[320px] shadow-2xl relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00ffa3] to-transparent"></div>
+            <h3 className="text-xl font-bold mb-6 text-center">Terminal Authorization</h3>
+            <input 
+              type="password" 
+              value={passwordInput}
+              onChange={(e) => setPasswordInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleLoginSubmit()}
+              className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none mb-2 text-sm focus:border-[#00ffa3] transition-all text-center tracking-[0.5em]"
+              placeholder="••••••"
+              autoFocus
+            />
+            {loginError && <p className="text-[#ff3b69] text-[10px] text-center mb-4 font-bold uppercase tracking-widest">{loginError}</p>}
+            <div className="flex flex-col gap-2 mt-6">
+              <button onClick={handleLoginSubmit} className="w-full py-4 rounded-2xl bg-[#00ffa3] text-black text-sm font-black uppercase tracking-widest shadow-[0_0_20px_rgba(0,255,163,0.3)] hover:scale-[1.02] transition-transform">Authorize</button>
+              <button onClick={() => setShowLoginModal(false)} className="w-full py-2 text-zinc-500 text-[11px] font-bold uppercase tracking-widest">Discard</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingItem && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[340px] shadow-2xl">
+            <div className="flex items-center gap-3 mb-8">
+              <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-[#00ffa3]">
+                <Calendar size={20} />
+              </div>
+              <h3 className="text-xl font-bold">Log: {editingItem.date} {month.substring(0,3)}</h3>
+            </div>
+            
+            <div className="space-y-6">
+              <div>
+                <label className="block text-zinc-500 text-[10px] mb-2 font-black uppercase tracking-widest">P/L Amount ({currency})</label>
+                <input 
+                  type="number" 
+                  value={editForm.pl}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    const plValue = parseFloat(val);
+                    let calcPct = editForm.percent;
+                    if (val !== '' && !isNaN(plValue) && equity > 0) calcPct = ((plValue / equity) * 100).toFixed(2);
+                    setEditForm({...editForm, pl: val, percent: calcPct});
+                  }}
+                  className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none focus:border-[#00ffa3] text-lg font-bold"
+                />
+              </div>
+              <div>
+                <label className="block text-zinc-500 text-[10px] mb-2 font-black uppercase tracking-widest">Auto Return (%)</label>
+                <input 
+                  type="number" 
+                  value={editForm.percent}
+                  onChange={(e) => setEditForm({...editForm, percent: e.target.value})}
+                  className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none focus:border-[#00ffa3] text-lg font-bold"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-10">
+              <button onClick={() => setEditingItem(null)} className="flex-1 py-4 text-zinc-500 text-sm font-bold uppercase tracking-widest">Discard</button>
+              <button onClick={handleSaveDay} className="flex-1 py-4 rounded-2xl bg-[#00ffa3] text-black text-sm font-black uppercase tracking-widest shadow-[0_0_20px_rgba(0,255,163,0.3)]">Commit</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[360px] shadow-2xl">
+            <h3 className="text-xl font-bold mb-8 uppercase tracking-tighter">System Config</h3>
+            <div className="space-y-5">
+              <div>
+                <label className="block text-zinc-500 text-[10px] mb-2 font-black uppercase tracking-widest">Global Equity</label>
+                <input type="number" value={settingsForm.equity} onChange={e => setSettingsForm({...settingsForm, equity: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none focus:border-[#00ffa3]" />
+              </div>
+              <div>
+                <label className="block text-zinc-500 text-[10px] mb-2 font-black uppercase tracking-widest">Broker Name</label>
+                <input type="text" value={settingsForm.broker} onChange={e => setSettingsForm({...settingsForm, broker: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none focus:border-[#00ffa3]" placeholder="e.g. Exness, XM" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-zinc-500 text-[10px] mb-2 font-black uppercase tracking-widest">Bulan</label>
+                  <select value={settingsForm.month} onChange={e => setSettingsForm({...settingsForm, month: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none focus:border-[#00ffa3]">
+                    {["January","February","March","April","May","June","July","August","September","October","November","December"].map(m => <option key={m} value={m} className="bg-[#16161a]">{m}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-zinc-500 text-[10px] mb-2 font-black uppercase tracking-widest">Tahun</label>
+                  <input type="number" value={settingsForm.year} onChange={e => setSettingsForm({...settingsForm, year: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none focus:border-[#00ffa3]" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-zinc-500 text-[10px] mb-2 font-black uppercase tracking-widest">Currency Code</label>
+                <input type="text" value={settingsForm.currency} onChange={e => setSettingsForm({...settingsForm, currency: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none focus:border-[#00ffa3]" />
+              </div>
+            </div>
+            <div className="flex gap-3 mt-10">
+              <button onClick={() => setShowSettingsModal(false)} className="flex-1 py-4 text-zinc-500 text-sm font-bold uppercase tracking-widest">Close</button>
+              <button onClick={handleSaveSettings} className="flex-1 py-4 rounded-2xl bg-[#00ffa3] text-black text-sm font-black uppercase tracking-widest shadow-[0_0_20px_rgba(0,255,163,0.3)]">Apply</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default App;
