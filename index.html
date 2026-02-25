@@ -102,7 +102,7 @@
     <div id="root" class="relative z-10"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+        const { useState, useEffect, useMemo, useRef } = React;
 
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyScZPgtCs_XlRkYNxfz9iMVWHD_hRrZlkWGQZuE_biAKLFeqwxC4OvA_mDsDh9MAoD/exec";
         const CACHE_KEY = "vrs_terminal_cache_v1";
@@ -143,6 +143,11 @@
             
             const [isLoading, setIsLoading] = useState(false);
             const [syncStatus, setSyncStatus] = useState('');
+
+            // State untuk fungsi rahsia
+            const [clickCount, setClickCount] = useState(0);
+            const [showAdminTrigger, setShowAdminTrigger] = useState(false);
+            const timerRef = useRef(null);
 
             const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
@@ -192,6 +197,29 @@
                 }
                 fetchData(); 
             }, []);
+
+            // Logik rahsia apabila logo diklik
+            const handleLogoClick = () => {
+                const newCount = clickCount + 1;
+                setClickCount(newCount);
+
+                // Reset timer setiap kali klik
+                if (timerRef.current) clearTimeout(timerRef.current);
+
+                if (newCount === 3) {
+                    setShowAdminTrigger(true);
+                    setClickCount(0);
+                    // Sembunyikan semula butang selepas 10 saat jika tidak dilog masuk
+                    setTimeout(() => {
+                        if (!isAdmin) setShowAdminTrigger(false);
+                    }, 10000);
+                } else {
+                    // Jika tidak klik lagi dalam masa 1 saat, reset pembilang
+                    timerRef.current = setTimeout(() => {
+                        setClickCount(0);
+                    }, 1000);
+                }
+            };
 
             const updateCache = (newData, newSettings) => {
                 const cacheData = {
@@ -318,17 +346,28 @@
                                         <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-black">Secure Terminal</span>
                                     </div>
                                     <div className="flex gap-2">
-                                        {isAdmin && (
-                                            <button onClick={() => { setSettingsForm({ month, year, currency, equity, broker }); setShowSettingsModal(true); }} className="p-2 rounded-xl bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all active:scale-90">⚙️</button>
+                                        {/* Butang Admin yang disembunyikan (Hanya muncul jika trigger aktif atau sudah login) */}
+                                        {(showAdminTrigger || isAdmin) && (
+                                            <React.Fragment>
+                                                {isAdmin && (
+                                                    <button onClick={() => { setSettingsForm({ month, year, currency, equity, broker }); setShowSettingsModal(true); }} className="p-2 rounded-xl bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all active:scale-90">⚙️</button>
+                                                )}
+                                                <button onClick={() => isAdmin ? setIsAdmin(false) : setShowLoginModal(true)} className={`p-2 rounded-xl transition-all active:scale-90 ${isAdmin ? 'bg-[#ff3b69]/20 text-[#ff3b69]' : 'bg-white/5 text-zinc-400 hover:text-white'}`}>
+                                                    {isAdmin ? '🔓' : '🔒'}
+                                                </button>
+                                            </React.Fragment>
                                         )}
-                                        <button onClick={() => isAdmin ? setIsAdmin(false) : setShowLoginModal(true)} className={`p-2 rounded-xl transition-all active:scale-90 ${isAdmin ? 'bg-[#ff3b69]/20 text-[#ff3b69]' : 'bg-white/5 text-zinc-400 hover:text-white'}`}>
-                                            {isAdmin ? '🔓' : '🔒'}
-                                        </button>
                                     </div>
                                 </div>
                                 
                                 <div className="flex flex-col items-center text-center">
-                                    <img src={LOGO_URL} alt="Logo" className="h-14 sm:h-20 w-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(0,255,163,0.2)]" />
+                                    {/* Logo sebagai Trigger Triple Tap */}
+                                    <img 
+                                        src={LOGO_URL} 
+                                        alt="Logo" 
+                                        onClick={handleLogoClick}
+                                        className="h-14 sm:h-20 w-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(0,255,163,0.2)] active:scale-95 transition-transform cursor-pointer no-select" 
+                                    />
                                     <h1 className="text-xl sm:text-2xl font-black bg-gradient-to-b from-white to-zinc-500 bg-clip-text text-transparent uppercase tracking-tight leading-tight">Laporan Prestasi Harian</h1>
                                     <div className="mt-3 flex items-center gap-2">
                                         <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">Broker</span>
@@ -397,7 +436,6 @@
                                                         <span className={`text-[12px] sm:text-[14px] font-bold mb-1 ${item.pl !== null ? 'text-zinc-100' : 'text-zinc-800'}`}>{item.date}</span>
                                                         {item.pl !== null && (
                                                             <div className="flex flex-col items-center leading-none">
-                                                                {/* LABEL PROFIT / LOSS */}
                                                                 <span className={`text-[7px] sm:text-[8px] font-black uppercase tracking-tighter mb-0.5 ${Number(item.pl) >= 0 ? 'text-[#00ffa3]' : 'text-[#ff3b69]'}`}>
                                                                     {Number(item.pl) >= 0 ? 'PROFIT' : 'LOSS'}
                                                                 </span>
@@ -431,7 +469,7 @@
                                     className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none mb-2 text-center tracking-[0.5em] focus:border-[#00ffa3]" placeholder="••••••" autoFocus />
                                 {loginError && <p className="text-[#ff3b69] text-[10px] font-bold uppercase mb-4 tracking-widest">{loginError}</p>}
                                 <button onClick={() => passwordInput === "admin123" ? (setIsAdmin(true), setShowLoginModal(false)) : setLoginError("INVALID_KEY")} className="w-full py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">Connect</button>
-                                <button onClick={() => setShowLoginModal(false)} className="mt-4 text-zinc-600 text-[10px] font-bold uppercase hover:text-white">Discard</button>
+                                <button onClick={() => { setShowLoginModal(false); setShowAdminTrigger(false); }} className="mt-4 text-zinc-600 text-[10px] font-bold uppercase hover:text-white">Discard</button>
                             </div>
                         </div>
                     )}
