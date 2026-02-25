@@ -14,22 +14,110 @@
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Plus Jakarta Sans', sans-serif; background-color: #050505; color: white; }
+        body { 
+            font-family: 'Plus Jakarta Sans', sans-serif; 
+            background-color: #020203; 
+            color: white; 
+            overflow-x: hidden;
+            margin: 0;
+        }
         .neon-green { color: #00ffa3; filter: drop-shadow(0 0 8px rgba(0, 255, 163, 0.3)); }
         .neon-red { color: #ff3b69; filter: drop-shadow(0 0 8px rgba(255, 59, 105, 0.3)); }
-        .glass { background: rgba(22, 22, 26, 0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        
+        /* Animasi Latar Belakang Trading */
+        .trading-bg {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0;
+            background: radial-gradient(circle at center, #0a0a0c 0%, #020203 100%);
+            overflow: hidden;
+        }
+        
+        .candle {
+            position: absolute;
+            width: 2px;
+            background: rgba(0, 255, 163, 0.05);
+            animation: float-up 20s linear infinite;
+        }
+        .candle::before {
+            content: '';
+            position: absolute;
+            top: 30%; left: -3px; width: 8px; height: 40%;
+            background: inherit;
+            border-radius: 1px;
+        }
+
+        @keyframes float-up {
+            from { transform: translateY(100vh); }
+            to { transform: translateY(-100vh); }
+        }
+
+        /* Scanning Line Effect */
+        .scanline {
+            width: 100%;
+            height: 100px;
+            z-index: 5;
+            background: linear-gradient(0deg, rgba(0, 255, 163, 0) 0%, rgba(0, 255, 163, 0.02) 50%, rgba(0, 255, 163, 0) 100%);
+            position: fixed;
+            top: -100px;
+            animation: scan 8s linear infinite;
+            pointer-events: none;
+        }
+
+        @keyframes scan {
+            0% { top: -100px; }
+            100% { top: 100vh; }
+        }
+
+        /* Ticker Animation */
+        .ticker-wrap {
+            width: 100%;
+            overflow: hidden;
+            background: rgba(22, 22, 26, 0.5);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            white-space: nowrap;
+        }
+        .ticker-content {
+            display: inline-block;
+            animation: ticker 30s linear infinite;
+            padding: 8px 0;
+        }
+        @keyframes ticker {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        .glass { background: rgba(15, 15, 17, 0.85); backdrop-filter: blur(20px); border: 1px solid rgba(255, 255, 255, 0.05); }
+        .no-select { user-select: none; -webkit-tap-highlight-color: transparent; }
     </style>
 </head>
 <body>
-    <div id="root"></div>
+    <div class="trading-bg" id="bg-animation"></div>
+    <div class="scanline"></div>
+    <div id="root" class="relative z-10"></div>
 
     <script type="text/babel">
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
 
-        // URL Google Apps Script anda
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyScZPgtCs_XlRkYNxfz9iMVWHD_hRrZlkWGQZuE_biAKLFeqwxC4OvA_mDsDh9MAoD/exec";
         const CACHE_KEY = "vrs_terminal_cache_v1";
         const LOGO_URL = "https://i.postimg.cc/Jz4PC4jG/CANVA-RK-PRO-(11).png";
+
+        // Komponen Ticker Dagangan
+        const MarketTicker = () => {
+            const pairs = ["EURUSD +0.24%", "GBPUSD -0.12%", "XAUUSD +1.05%", "BTCUSD +2.45%", "USDJPY -0.05%", "VRS EA ACTIVE", "NODE-ONLINE"];
+            return (
+                <div className="ticker-wrap no-select">
+                    <div className="ticker-content">
+                        {[...pairs, ...pairs].map((text, i) => (
+                            <span key={i} className="mx-6 text-[9px] font-black tracking-widest text-zinc-600 uppercase">
+                                {text.includes('+') ? <span className="text-[#00ffa3]/40">▲ {text}</span> : text.includes('-') ? <span className="text-[#ff3b69]/40">▼ {text}</span> : text}
+                            </span>
+                        ))}
+                    </div>
+                </div>
+            );
+        };
 
         const App = () => {
             const [data, setData] = useState([]);
@@ -60,8 +148,19 @@
             const totalPL = data.reduce((sum, item) => sum + (item.pl || 0), 0);
             const totalPercent = equity > 0 ? (totalPL / equity) * 100 : 0;
 
-            // Memuatkan cache semasa mula-mula aplikasi dibuka
             useEffect(() => {
+                // Jana lilin latar belakang secara dinamik
+                const bg = document.getElementById('bg-animation');
+                for(let i=0; i<20; i++) {
+                    const candle = document.createElement('div');
+                    candle.className = 'candle';
+                    candle.style.left = Math.random() * 100 + '%';
+                    candle.style.height = (Math.random() * 100 + 50) + 'px';
+                    candle.style.animationDelay = (Math.random() * 20) + 's';
+                    candle.style.background = Math.random() > 0.5 ? 'rgba(0, 255, 163, 0.05)' : 'rgba(255, 59, 105, 0.05)';
+                    bg.appendChild(candle);
+                }
+
                 const cached = localStorage.getItem(CACHE_KEY);
                 if (cached) {
                     try {
@@ -74,9 +173,7 @@
                             setCurrency(parsed.settings.currency);
                             setBroker(parsed.settings.broker);
                         }
-                    } catch (e) {
-                        console.error("Gagal membaca cache", e);
-                    }
+                    } catch (e) {}
                 }
                 fetchData(); 
             }, []);
@@ -92,7 +189,7 @@
 
             const fetchData = () => {
                 setIsLoading(true);
-                setSyncStatus('Syncing Terminal...');
+                setSyncStatus('SYNCING');
                 fetch(SCRIPT_URL + "?timestamp=" + new Date().getTime())
                     .then(res => res.json())
                     .then(result => {
@@ -117,22 +214,19 @@
                             setCurrency(updatedSettings.currency);
                             setBroker(updatedSettings.broker);
                         }
-                        
-                        // Simpan ke cache selepas fetch berjaya
                         updateCache(updatedData, updatedSettings);
-                        
                         setIsLoading(false);
-                        setSyncStatus('Terminal Live ✅');
+                        setSyncStatus('LIVE');
                         setTimeout(() => setSyncStatus(''), 3000);
                     })
                     .catch(() => {
-                        setSyncStatus('Offline Mode (Cached) ⚠️');
+                        setSyncStatus('CACHED');
                         setIsLoading(false);
                     });
             };
 
             const sendToGas = async (payload) => {
-                setSyncStatus('Updating Cloud...');
+                setSyncStatus('UPLOADING');
                 try {
                     await fetch(SCRIPT_URL, {
                         method: 'POST',
@@ -140,11 +234,11 @@
                         headers: { 'Content-Type': 'text/plain' },
                         body: JSON.stringify(payload)
                     });
-                    setSyncStatus('Execution Success ✅');
+                    setSyncStatus('SUCCESS');
                     setTimeout(() => setSyncStatus(''), 3000);
                     return true;
                 } catch {
-                    setSyncStatus('Local Save Only (Sync Failed) ❌');
+                    setSyncStatus('ERROR');
                     return false;
                 }
             };
@@ -153,36 +247,18 @@
                 const plVal = editForm.pl === '' ? null : parseFloat(editForm.pl);
                 const pctVal = editForm.percent === '' ? null : parseFloat(editForm.percent);
                 const newData = data.map(d => d.date === editingItem.date ? { ...d, pl: plVal, percent: pctVal } : d);
-                
-                // Simpan ke State dan Cache dahulu
                 setData(newData);
                 updateCache(newData, null);
-                
                 setEditingItem(null);
-                // Kemudian sync ke Google Sheet
                 await sendToGas({ action: 'updateDay', date: editingItem.date, pl: plVal, percent: pctVal });
             };
 
             const handleSaveSettings = async () => {
                 const s = settingsForm;
-                const newSettings = { 
-                    equity: parseFloat(s.equity), 
-                    month: s.month, 
-                    year: parseInt(s.year), 
-                    currency: s.currency, 
-                    broker: s.broker 
-                };
-                
-                // Simpan ke State dan Cache dahulu
-                setEquity(newSettings.equity); 
-                setMonth(newSettings.month); 
-                setYear(newSettings.year); 
-                setCurrency(newSettings.currency); 
-                setBroker(newSettings.broker);
+                const newSettings = { equity: parseFloat(s.equity), month: s.month, year: parseInt(s.year), currency: s.currency, broker: s.broker };
+                setEquity(newSettings.equity); setMonth(newSettings.month); setYear(newSettings.year); setCurrency(newSettings.currency); setBroker(newSettings.broker);
                 updateCache(null, newSettings);
-                
                 setShowSettingsModal(false);
-                // Kemudian sync ke Google Sheet
                 await sendToGas({ action: 'updateSettings', ...s, equity: parseFloat(s.equity), year: parseInt(s.year) });
             };
 
@@ -191,156 +267,187 @@
                 return (v >= 0 ? '+' : '') + parseFloat(v).toFixed(2);
             };
 
-            const calendarGrid = [];
-            const start = getStartDayOfMonth(month, year);
-            for (let i = 0; i < start; i++) calendarGrid.push({ isBlank: true });
-            for (let i = 1; i <= getDaysInMonth(month, year); i++) {
-                calendarGrid.push(data.find(d => parseInt(d.date) === i) || { date: i, pl: null, percent: null });
-            }
+            const calendarGrid = useMemo(() => {
+                const grid = [];
+                const start = getStartDayOfMonth(month, year);
+                const daysInMonth = getDaysInMonth(month, year);
+                for (let i = 0; i < start; i++) grid.push({ isBlank: true });
+                for (let i = 1; i <= daysInMonth; i++) {
+                    grid.push(data.find(d => parseInt(d.date) === i) || { date: i, pl: null, percent: null });
+                }
+                return grid;
+            }, [data, month, year]);
 
             return (
-                <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-                    {/* Glow Backgrounds */}
-                    <div className="fixed top-[-10%] left-[-10%] w-[50%] h-[50%] bg-[#00ffa3]/5 blur-[120px] rounded-full pointer-events-none"></div>
-                    <div className="fixed bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-[#ff3b69]/5 blur-[120px] rounded-full pointer-events-none"></div>
-
-                    <div className="bg-[#0f0f11] w-full max-w-[440px] rounded-[32px] overflow-hidden border border-white/5 shadow-2xl relative">
-                        {/* Header */}
-                        <div className="bg-[#16161a] p-6 border-b border-white/5">
-                            <div className="flex justify-between items-center mb-4">
-                                <div className="flex items-center gap-2">
-                                    <div className="w-2 h-2 rounded-full bg-[#00ffa3] animate-pulse"></div>
-                                    <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">VRS EA Terminal</span>
-                                </div>
-                                <div className="flex gap-2">
-                                    {isAdmin && <button onClick={() => { setSettingsForm({ month, year, currency, equity, broker }); setShowSettingsModal(true); }} className="p-2 rounded-lg bg-white/5 text-zinc-400">⚙️</button>}
-                                    <button onClick={() => isAdmin ? setIsAdmin(false) : setShowLoginModal(true)} className={`p-2 rounded-lg ${isAdmin ? 'bg-[#ff3b69]/20 text-[#ff3b69]' : 'bg-white/5 text-zinc-500'}`}>
-                                        {isAdmin ? '🔓' : '🔒'}
-                                    </button>
-                                </div>
-                            </div>
+                <div className="min-h-screen flex flex-col items-center justify-start sm:justify-center relative overflow-hidden">
+                    <MarketTicker />
+                    
+                    {/* Main Container */}
+                    <div className="w-full max-w-[460px] p-3 sm:p-6">
+                        <div className="bg-[#0f0f11]/90 backdrop-blur-xl w-full rounded-[24px] sm:rounded-[32px] overflow-hidden border border-white/5 shadow-[0_32px_64px_-12px_rgba(0,0,0,0.8)] relative z-10">
                             
-                            <div className="flex flex-col items-center text-center mb-4">
-                                <img 
-                                    src={LOGO_URL} 
-                                    alt="VRS EA Logo" 
-                                    className="h-16 w-auto mb-3 object-contain drop-shadow-[0_0_10px_rgba(0,255,163,0.2)]"
-                                    onerror="this.style.display='none'"
-                                />
-                                <h1 className="text-xl font-bold bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent uppercase tracking-tight">Laporan Prestasi Harian</h1>
-                                <p className="text-xs text-zinc-500 mt-1">Broker: <span className="text-[#00ffa3] font-bold">{broker}</span></p>
-                            </div>
-                        </div>
-
-                        <div className="p-6">
-                            {/* Stats */}
-                            <div className="grid grid-cols-1 gap-4 mb-8">
-                                <div className="bg-[#16161a] rounded-2xl p-5 border border-white/5 flex justify-between items-center">
-                                    <div>
-                                        <div className="text-[11px] uppercase text-zinc-500 font-bold mb-0.5 tracking-widest">Total Equity</div>
-                                        <div className="text-2xl font-bold">{equity.toLocaleString()} <span className="text-sm font-normal text-zinc-600">{currency}</span></div>
+                            {/* Header Section */}
+                            <div className="bg-[#16161a] p-4 sm:p-6 border-b border-white/5">
+                                <div className="flex justify-between items-center mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-[#00ffa3] animate-pulse shadow-[0_0_8px_#00ffa3]"></div>
+                                        <span className="text-[9px] uppercase tracking-[0.2em] text-zinc-500 font-black">Node Terminal Active</span>
                                     </div>
-                                    <span className="text-2xl">📊</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-[#16161a] rounded-2xl p-4 border border-white/5">
-                                        <div className="text-[10px] uppercase text-zinc-500 font-bold mb-1 tracking-widest">📈 {month.substring(0,3)} P/L</div>
-                                        <div className={`text-xl font-bold ${totalPL >= 0 ? 'neon-green' : 'neon-red'}`}>{formatValue(totalPL)}</div>
-                                    </div>
-                                    <div className="bg-[#16161a] rounded-2xl p-4 border border-white/5">
-                                        <div className="text-[10px] uppercase text-zinc-500 font-bold mb-1 tracking-widest">Return Rate</div>
-                                        <div className={`text-xl font-bold ${totalPercent >= 0 ? 'neon-green' : 'neon-red'}`}>{formatValue(totalPercent)}%</div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Calendar */}
-                            <div className="flex justify-between items-center mb-6 px-1">
-                                <div className="text-sm font-bold">📅 {month} {year}</div>
-                                {syncStatus && <span className="text-[10px] font-bold neon-green bg-[#00ffa3]/10 px-2.5 py-1 rounded-full">{syncStatus}</span>}
-                            </div>
-
-                            <div className="grid grid-cols-7 mb-4 border-b border-white/5 pb-2 text-center text-[10px] font-black text-zinc-600 uppercase tracking-tighter">
-                                {daysOfWeek.map(d => <div key={d}>{d}</div>)}
-                            </div>
-
-                            <div className="grid grid-cols-7 gap-y-4 gap-x-1">
-                                {calendarGrid.map((item, i) => (
-                                    <div key={i} onClick={() => !item.isBlank && isAdmin && (setEditingItem(item), setEditForm({ pl: item.pl || '', percent: item.percent || '' }))}
-                                        className={`flex flex-col items-center justify-start h-14 rounded-xl border border-transparent transition-all ${!item.isBlank && isAdmin ? 'cursor-pointer hover:bg-white/5 active:scale-95' : ''}`}>
-                                        {!item.isBlank && (
-                                            <>
-                                                <span className={`text-[13px] font-bold mb-1.5 ${item.pl !== null ? 'text-white' : 'text-zinc-600'}`}>{item.date}</span>
-                                                {item.pl !== null && (
-                                                    <div className="flex flex-col items-center leading-none">
-                                                        <span className={`text-[9px] font-black uppercase ${item.pl >= 0 ? 'neon-green' : 'neon-red'}`}>{item.pl >= 0 ? 'Win' : 'Loss'}</span>
-                                                        <span className={`text-[10px] font-bold ${item.pl >= 0 ? 'neon-green' : 'neon-red'}`}>{formatValue(item.pl)}</span>
-                                                    </div>
-                                                )}
-                                            </>
+                                    <div className="flex gap-1.5">
+                                        {isAdmin && (
+                                            <button onClick={() => { setSettingsForm({ month, year, currency, equity, broker }); setShowSettingsModal(true); }} className="p-1.5 sm:p-2 rounded-lg bg-white/5 text-zinc-500 hover:text-white transition-all">⚙️</button>
                                         )}
+                                        <button onClick={() => isAdmin ? setIsAdmin(false) : setShowLoginModal(true)} className={`p-1.5 sm:p-2 rounded-lg transition-all ${isAdmin ? 'bg-[#ff3b69]/20 text-[#ff3b69]' : 'bg-white/5 text-zinc-500 hover:text-white'}`}>
+                                            {isAdmin ? '🔓' : '🔒'}
+                                        </button>
                                     </div>
-                                ))}
+                                </div>
+                                
+                                <div className="flex flex-col items-center text-center">
+                                    <img src={LOGO_URL} alt="Logo" className="h-12 sm:h-16 w-auto mb-3 object-contain drop-shadow-[0_0_15px_rgba(0,255,163,0.3)] animate-bounce-slow" style={{animationDuration: '3s'}} />
+                                    <h1 className="text-lg sm:text-xl font-extrabold bg-gradient-to-b from-white to-zinc-500 bg-clip-text text-transparent uppercase tracking-tight">Laporan Untung Rugi</h1>
+                                    <div className="flex items-center gap-2 mt-2">
+                                        <span className="text-[8px] text-zinc-600 font-black uppercase tracking-[0.3em]">Broker Context</span>
+                                        <span className="text-[10px] text-[#00ffa3] font-black uppercase tracking-wider bg-[#00ffa3]/5 px-3 py-0.5 rounded-full border border-[#00ffa3]/10 shadow-[0_0_10px_rgba(0,255,163,0.05)]">{broker}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Stats Section */}
+                            <div className="p-4 sm:p-6 space-y-4">
+                                <div className="bg-[#16161a] rounded-2xl p-4 border border-white/5 group hover:border-[#00ffa3]/20 transition-all">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <div className="text-[9px] uppercase text-zinc-600 font-black mb-1 tracking-widest">Available Equity</div>
+                                            <div className="text-2xl font-black tracking-tighter">{equity.toLocaleString()} <span className="text-xs font-normal text-zinc-600 ml-1 uppercase">{currency}</span></div>
+                                        </div>
+                                        <div className="text-2xl opacity-20 group-hover:opacity-60 transition-opacity">🏦</div>
+                                    </div>
+                                    <div className="w-full bg-zinc-900 h-[2px] mt-4 rounded-full overflow-hidden">
+                                        <div className="bg-[#00ffa3] h-full animate-pulse" style={{width: '100%'}}></div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="bg-[#16161a] rounded-2xl p-4 border border-white/5">
+                                        <div className="text-[8px] uppercase text-zinc-600 font-black mb-1 tracking-widest">Monthly P/L</div>
+                                        <div className={`text-xl font-black ${totalPL >= 0 ? 'neon-green' : 'neon-red'}`}>{formatValue(totalPL)}</div>
+                                    </div>
+                                    <div className="bg-[#16161a] rounded-2xl p-4 border border-white/5">
+                                        <div className="text-[8px] uppercase text-zinc-600 font-black mb-1 tracking-widest">ROI Percentage</div>
+                                        <div className={`text-xl font-black ${totalPercent >= 0 ? 'neon-green' : 'neon-red'}`}>{formatValue(totalPercent)}%</div>
+                                    </div>
+                                </div>
+
+                                {/* Calendar Header */}
+                                <div className="flex justify-between items-center pt-4 px-1 border-t border-white/5">
+                                    <div className="text-[11px] font-black tracking-widest uppercase text-white flex items-center gap-2">
+                                        <span className="w-2 h-2 rounded-sm bg-[#00ffa3]"></span>
+                                        {month} {year}
+                                    </div>
+                                    {syncStatus && (
+                                        <div className="text-[8px] font-black text-[#00ffa3] tracking-widest bg-[#00ffa3]/5 px-2 py-1 rounded border border-[#00ffa3]/20 animate-pulse">{syncStatus}</div>
+                                    )}
+                                </div>
+
+                                {/* Calendar Grid */}
+                                <div className="grid grid-cols-7 gap-1 sm:gap-2 no-select">
+                                    {daysOfWeek.map(d => <div key={d} className="text-center text-[9px] font-black text-zinc-700 uppercase py-2">{d}</div>)}
+                                    {calendarGrid.map((item, i) => (
+                                        <div 
+                                            key={i} 
+                                            onClick={() => !item.isBlank && isAdmin && (setEditingItem(item), setEditForm({ pl: item.pl !== null ? item.pl : '', percent: item.percent !== null ? item.percent : '' }))}
+                                            className={`flex flex-col items-center justify-start py-2 px-0.5 min-h-[52px] rounded-xl border border-transparent transition-all ${!item.isBlank && isAdmin ? 'cursor-pointer hover:bg-[#00ffa3]/5 hover:border-[#00ffa3]/10 active:scale-90' : ''}`}
+                                        >
+                                            {!item.isBlank && (
+                                                <>
+                                                    <span className={`text-[11px] font-bold mb-1 ${item.pl !== null ? 'text-white' : 'text-zinc-800'}`}>{item.date}</span>
+                                                    {item.pl !== null && (
+                                                        <div className="flex flex-col items-center leading-none">
+                                                            <span className={`text-[8px] font-black tracking-tighter ${item.pl >= 0 ? 'neon-green' : 'neon-red'}`}>{formatValue(item.pl)}</span>
+                                                        </div>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="p-4 bg-white/[0.02] text-center">
+                                <p className="text-[8px] text-zinc-700 font-black uppercase tracking-[0.4em]">Node-ID: VRS-NODE-2026-X</p>
                             </div>
                         </div>
                     </div>
 
                     {/* Modals */}
                     {showLoginModal && (
-                        <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50 backdrop-blur-md">
-                            <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[320px] text-center">
-                                <h3 className="text-xl font-bold mb-6">Terminal Authorization</h3>
-                                <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (passwordInput === "admin123" ? (setIsAdmin(true), setShowLoginModal(false)) : setLoginError("Invalid Key"))}
-                                    className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none mb-2 text-center tracking-[0.5em]" placeholder="••••••" autoFocus />
-                                {loginError && <p className="text-[#ff3b69] text-[10px] font-bold uppercase mb-4">{loginError}</p>}
-                                <button onClick={() => passwordInput === "admin123" ? (setIsAdmin(true), setShowLoginModal(false)) : setLoginError("Invalid Key")} className="w-full py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest shadow-lg">Authorize</button>
-                                <button onClick={() => setShowLoginModal(false)} className="mt-4 text-zinc-500 text-[11px] font-bold uppercase">Cancel</button>
+                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 backdrop-blur-xl">
+                            <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[320px] text-center shadow-2xl relative">
+                                <div className="w-16 h-16 rounded-full bg-[#00ffa3]/10 flex items-center justify-center mx-auto mb-6 text-[#00ffa3] shadow-[0_0_20px_rgba(0,255,163,0.1)]">🔒</div>
+                                <h3 className="text-xl font-black mb-6 uppercase tracking-tighter">Terminal Authorization</h3>
+                                <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (passwordInput === "admin123" ? (setIsAdmin(true), setShowLoginModal(false)) : setLoginError("AUTH_FAILED"))}
+                                    className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none mb-2 text-center tracking-[0.5em] focus:border-[#00ffa3]" placeholder="••••••" autoFocus />
+                                {loginError && <p className="text-[#ff3b69] text-[9px] font-black uppercase mb-4 tracking-widest">{loginError}</p>}
+                                <button onClick={() => passwordInput === "admin123" ? (setIsAdmin(true), setShowLoginModal(false)) : setLoginError("AUTH_FAILED")} className="w-full py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest shadow-lg active:scale-95 transition-transform">Authorize</button>
+                                <button onClick={() => setShowLoginModal(false)} className="mt-4 text-zinc-600 text-[10px] font-bold uppercase tracking-widest hover:text-white">Cancel</button>
                             </div>
                         </div>
                     )}
 
                     {editingItem && (
-                        <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50 backdrop-blur-md">
+                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 backdrop-blur-xl">
                             <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[340px]">
-                                <h3 className="text-xl font-bold mb-8">Log: {editingItem.date} {month.substring(0,3)}</h3>
+                                <h3 className="text-xl font-black mb-8 uppercase tracking-tighter">Log Event: Day {editingItem.date}</h3>
                                 <div className="space-y-6">
                                     <div>
-                                        <label className="text-zinc-500 text-[10px] font-black uppercase mb-2 block tracking-widest">P/L Amount ({currency})</label>
+                                        <label className="text-zinc-600 text-[9px] font-black uppercase mb-2 block tracking-widest">Entry P/L ({currency})</label>
                                         <input type="number" value={editForm.pl} onChange={e => setEditForm({...editForm, pl: e.target.value, percent: e.target.value ? ((e.target.value / equity) * 100).toFixed(2) : ''})}
-                                            className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none text-lg font-bold" />
+                                            className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none text-xl font-black focus:border-[#00ffa3]" />
                                     </div>
                                     <div>
-                                        <label className="text-zinc-500 text-[10px] font-black uppercase mb-2 block tracking-widest">Auto Return (%)</label>
+                                        <label className="text-zinc-600 text-[9px] font-black uppercase mb-2 block tracking-widest">Derived Return (%)</label>
                                         <input type="number" value={editForm.percent} onChange={e => setEditForm({...editForm, percent: e.target.value})}
-                                            className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none text-lg font-bold" />
+                                            className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none text-xl font-black focus:border-[#00ffa3]" />
                                     </div>
                                 </div>
                                 <div className="flex gap-3 mt-10">
-                                    <button onClick={() => setEditingItem(null)} className="flex-1 text-zinc-500 text-sm font-bold uppercase">Discard</button>
-                                    <button onClick={handleSaveDay} className="flex-1 py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest">Commit</button>
+                                    <button onClick={() => setEditingItem(null)} className="flex-1 text-zinc-600 text-xs font-black uppercase tracking-widest">Discard</button>
+                                    <button onClick={handleSaveDay} className="flex-1 py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest shadow-lg active:scale-95 transition-transform">Commit</button>
                                 </div>
                             </div>
                         </div>
                     )}
 
                     {showSettingsModal && (
-                        <div className="fixed inset-0 bg-black/90 flex items-center justify-center p-4 z-50 backdrop-blur-md">
+                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-4 z-50 backdrop-blur-xl">
                             <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[360px]">
-                                <h3 className="text-xl font-bold mb-8 uppercase tracking-tighter">System Config</h3>
-                                <div className="space-y-5">
-                                    <input type="number" value={settingsForm.equity} onChange={e => setSettingsForm({...settingsForm, equity: e.target.value})} placeholder="Equity" className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none" />
-                                    <input type="text" value={settingsForm.broker} onChange={e => setSettingsForm({...settingsForm, broker: e.target.value})} placeholder="Broker Name" className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none" />
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <select value={settingsForm.month} onChange={e => setSettingsForm({...settingsForm, month: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none">
-                                            {["January","February","March","April","May","June","July","August","September","October","November","December"].map(m => <option key={m} value={m} className="bg-[#16161a]">{m}</option>)}
-                                        </select>
-                                        <input type="number" value={settingsForm.year} onChange={e => setSettingsForm({...settingsForm, year: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none" />
+                                <h3 className="text-xl font-black mb-8 uppercase tracking-tighter">Global Config</h3>
+                                <div className="space-y-4">
+                                    <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                                        <label className="text-zinc-700 text-[8px] font-black uppercase mb-1 block tracking-widest">Baseline Equity</label>
+                                        <input type="number" value={settingsForm.equity} onChange={e => setSettingsForm({...settingsForm, equity: e.target.value})} className="w-full bg-transparent text-white outline-none font-black" />
                                     </div>
-                                    <input type="text" value={settingsForm.currency} onChange={e => setSettingsForm({...settingsForm, currency: e.target.value})} placeholder="Currency" className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none" />
+                                    <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                                        <label className="text-zinc-700 text-[8px] font-black uppercase mb-1 block tracking-widest">Broker Name</label>
+                                        <input type="text" value={settingsForm.broker} onChange={e => setSettingsForm({...settingsForm, broker: e.target.value})} className="w-full bg-transparent text-white outline-none font-black" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                                            <label className="text-zinc-700 text-[8px] font-black uppercase mb-1 block tracking-widest">Period</label>
+                                            <select value={settingsForm.month} onChange={e => setSettingsForm({...settingsForm, month: e.target.value})} className="w-full bg-transparent text-white outline-none text-[10px] font-black uppercase appearance-none">
+                                                {["January","February","March","April","May","June","July","August","September","October","November","December"].map(m => <option key={m} value={m} className="bg-[#16161a]">{m}</option>)}
+                                            </select>
+                                        </div>
+                                        <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                                            <label className="text-zinc-700 text-[8px] font-black uppercase mb-1 block tracking-widest">Year</label>
+                                            <input type="number" value={settingsForm.year} onChange={e => setSettingsForm({...settingsForm, year: e.target.value})} className="w-full bg-transparent text-white outline-none font-black" />
+                                        </div>
+                                    </div>
                                 </div>
                                 <div className="flex gap-3 mt-10">
-                                    <button onClick={() => setShowSettingsModal(false)} className="flex-1 text-zinc-500 text-sm font-bold uppercase">Close</button>
-                                    <button onClick={handleSaveSettings} className="flex-1 py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest">Apply</button>
+                                    <button onClick={() => setShowSettingsModal(false)} className="flex-1 text-zinc-600 text-xs font-black uppercase tracking-widest">Abort</button>
+                                    <button onClick={handleSaveSettings} className="flex-1 py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest shadow-lg">Apply</button>
                                 </div>
                             </div>
                         </div>
