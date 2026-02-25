@@ -28,6 +28,8 @@
 
         // URL Google Apps Script anda
         const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyScZPgtCs_XlRkYNxfz9iMVWHD_hRrZlkWGQZuE_biAKLFeqwxC4OvA_mDsDh9MAoD/exec";
+        const CACHE_KEY = "vrs_terminal_cache_v1";
+        const LOGO_URL = "https://i.postimg.cc/Jz4PC4jG/CANVA-RK-PRO-(11).png";
 
         const App = () => {
             const [data, setData] = useState([]);
@@ -58,7 +60,35 @@
             const totalPL = data.reduce((sum, item) => sum + (item.pl || 0), 0);
             const totalPercent = equity > 0 ? (totalPL / equity) * 100 : 0;
 
-            useEffect(() => { fetchData(); }, []);
+            // Memuatkan cache semasa mula-mula aplikasi dibuka
+            useEffect(() => {
+                const cached = localStorage.getItem(CACHE_KEY);
+                if (cached) {
+                    try {
+                        const parsed = JSON.parse(cached);
+                        if (parsed.data) setData(parsed.data);
+                        if (parsed.settings) {
+                            setEquity(parsed.settings.equity);
+                            setMonth(parsed.settings.month);
+                            setYear(parsed.settings.year);
+                            setCurrency(parsed.settings.currency);
+                            setBroker(parsed.settings.broker);
+                        }
+                    } catch (e) {
+                        console.error("Gagal membaca cache", e);
+                    }
+                }
+                fetchData(); 
+            }, []);
+
+            const updateCache = (newData, newSettings) => {
+                const cacheData = {
+                    data: newData || data,
+                    settings: newSettings || { equity, month, year, currency, broker },
+                    lastUpdated: new Date().getTime()
+                };
+                localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
+            };
 
             const fetchData = () => {
                 setIsLoading(true);
@@ -66,22 +96,37 @@
                 fetch(SCRIPT_URL + "?timestamp=" + new Date().getTime())
                     .then(res => res.json())
                     .then(result => {
+                        let updatedData = data;
+                        let updatedSettings = { equity, month, year, currency, broker };
+
                         if (result.data) {
-                            setData(result.data.filter(i => i.date).sort((a, b) => a.date - b.date));
+                            updatedData = result.data.filter(i => i.date).sort((a, b) => a.date - b.date);
+                            setData(updatedData);
                         }
                         if (result.settings) {
-                            setEquity(parseFloat(result.settings.equity) || 1000);
-                            setMonth(result.settings.month || 'February');
-                            setYear(parseInt(result.settings.year) || 2025);
-                            setCurrency(result.settings.currency || 'USD');
-                            setBroker(result.settings.broker || 'VRS Broker');
+                            updatedSettings = {
+                                equity: parseFloat(result.settings.equity) || 1000,
+                                month: result.settings.month || 'February',
+                                year: parseInt(result.settings.year) || 2025,
+                                currency: result.settings.currency || 'USD',
+                                broker: result.settings.broker || 'VRS Broker'
+                            };
+                            setEquity(updatedSettings.equity);
+                            setMonth(updatedSettings.month);
+                            setYear(updatedSettings.year);
+                            setCurrency(updatedSettings.currency);
+                            setBroker(updatedSettings.broker);
                         }
+                        
+                        // Simpan ke cache selepas fetch berjaya
+                        updateCache(updatedData, updatedSettings);
+                        
                         setIsLoading(false);
                         setSyncStatus('Terminal Live ✅');
                         setTimeout(() => setSyncStatus(''), 3000);
                     })
                     .catch(() => {
-                        setSyncStatus('Connection Error ❌');
+                        setSyncStatus('Offline Mode (Cached) ⚠️');
                         setIsLoading(false);
                     });
             };
@@ -99,7 +144,7 @@
                     setTimeout(() => setSyncStatus(''), 3000);
                     return true;
                 } catch {
-                    setSyncStatus('Update Failed ❌');
+                    setSyncStatus('Local Save Only (Sync Failed) ❌');
                     return false;
                 }
             };
@@ -107,15 +152,37 @@
             const handleSaveDay = async () => {
                 const plVal = editForm.pl === '' ? null : parseFloat(editForm.pl);
                 const pctVal = editForm.percent === '' ? null : parseFloat(editForm.percent);
-                setData(data.map(d => d.date === editingItem.date ? { ...d, pl: plVal, percent: pctVal } : d));
+                const newData = data.map(d => d.date === editingItem.date ? { ...d, pl: plVal, percent: pctVal } : d);
+                
+                // Simpan ke State dan Cache dahulu
+                setData(newData);
+                updateCache(newData, null);
+                
                 setEditingItem(null);
+                // Kemudian sync ke Google Sheet
                 await sendToGas({ action: 'updateDay', date: editingItem.date, pl: plVal, percent: pctVal });
             };
 
             const handleSaveSettings = async () => {
                 const s = settingsForm;
-                setEquity(parseFloat(s.equity)); setMonth(s.month); setYear(parseInt(s.year)); setCurrency(s.currency); setBroker(s.broker);
+                const newSettings = { 
+                    equity: parseFloat(s.equity), 
+                    month: s.month, 
+                    year: parseInt(s.year), 
+                    currency: s.currency, 
+                    broker: s.broker 
+                };
+                
+                // Simpan ke State dan Cache dahulu
+                setEquity(newSettings.equity); 
+                setMonth(newSettings.month); 
+                setYear(newSettings.year); 
+                setCurrency(newSettings.currency); 
+                setBroker(newSettings.broker);
+                updateCache(null, newSettings);
+                
                 setShowSettingsModal(false);
+                // Kemudian sync ke Google Sheet
                 await sendToGas({ action: 'updateSettings', ...s, equity: parseFloat(s.equity), year: parseInt(s.year) });
             };
 
@@ -140,7 +207,7 @@
                     <div className="bg-[#0f0f11] w-full max-w-[440px] rounded-[32px] overflow-hidden border border-white/5 shadow-2xl relative">
                         {/* Header */}
                         <div className="bg-[#16161a] p-6 border-b border-white/5">
-                            <div className="flex justify-between items-center mb-6">
+                            <div className="flex justify-between items-center mb-4">
                                 <div className="flex items-center gap-2">
                                     <div className="w-2 h-2 rounded-full bg-[#00ffa3] animate-pulse"></div>
                                     <span className="text-[10px] uppercase tracking-widest text-zinc-500 font-bold">VRS EA Terminal</span>
@@ -152,8 +219,17 @@
                                     </button>
                                 </div>
                             </div>
-                            <h1 className="text-xl font-bold bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent mb-1 uppercase tracking-tight">Laporan Prestasi Harian</h1>
-                            <p className="text-xs text-zinc-500">Broker: <span className="text-[#00ffa3] font-bold">{broker}</span></p>
+                            
+                            <div className="flex flex-col items-center text-center mb-4">
+                                <img 
+                                    src={LOGO_URL} 
+                                    alt="VRS EA Logo" 
+                                    className="h-16 w-auto mb-3 object-contain drop-shadow-[0_0_10px_rgba(0,255,163,0.2)]"
+                                    onerror="this.style.display='none'"
+                                />
+                                <h1 className="text-xl font-bold bg-gradient-to-r from-white to-zinc-500 bg-clip-text text-transparent uppercase tracking-tight">Laporan Prestasi Harian</h1>
+                                <p className="text-xs text-zinc-500 mt-1">Broker: <span className="text-[#00ffa3] font-bold">{broker}</span></p>
+                            </div>
                         </div>
 
                         <div className="p-6">
