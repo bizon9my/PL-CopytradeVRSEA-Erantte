@@ -111,6 +111,9 @@
             from { transform: translate(-50%, 20px); opacity: 0; }
             to { transform: translate(-50%, 0); opacity: 1; }
         }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
 <body>
@@ -121,7 +124,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzfzm6StGml9bnxQkHz-js8wLN8SKA1RL78IZIP4s9TUxX44DD5KvuDk6eWL58-c3F2/exec";
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwZMT9Ri0OsIS7Qxkpvonx7CQHAFUQjfp26m8yI9IcOxFUzmbdLkCDQJXjDPmceQrgu/exec";
         const CACHE_KEY = "vrs_terminal_cache_v1";
         const LOGO_URL = "https://i.postimg.cc/Jz4PC4jG/CANVA-RK-PRO-(11).png";
 
@@ -151,6 +154,7 @@
             const [toast, setToast] = useState('');
             
             const [equity, setEquity] = useState(1000);
+            const [withdrawal, setWithdrawal] = useState(0);
             const [month, setMonth] = useState('February');
             const [year, setYear] = useState(2025);
             const [currency, setCurrency] = useState('USD');
@@ -159,11 +163,18 @@
             const [invId, setInvId] = useState('3061554');
             const [invServer, setInvServer] = useState('ErranteSC-Real2');
             const [invPass, setInvPass] = useState('Gold@123');
+
+            // Manual Historical P/L State
+            const [monthlyPL, setMonthlyPL] = useState({
+                janPL: 0, febPL: 0, marPL: 0, aprPL: 0, mayPL: 0, junPL: 0,
+                julPL: 0, augPL: 0, sepPL: 0, octPL: 0, novPL: 0, decPL: 0
+            });
             
             const [showSettingsModal, setShowSettingsModal] = useState(false);
             const [settingsForm, setSettingsForm] = useState({ 
                 month: 'February', year: 2025, currency: 'USD', equity: 1000, broker: 'VRS Broker',
-                invId: '3061554', invServer: 'ErranteSC-Real2', invPass: 'Gold@123'
+                invId: '3061554', invServer: 'ErranteSC-Real2', invPass: 'Gold@123',
+                withdrawal: 0, ...monthlyPL
             });
             
             const [isLoading, setIsLoading] = useState(false);
@@ -178,22 +189,30 @@
             const getDaysInMonth = (m, y) => new Date(y, new Date(`${m} 1, ${y}`).getMonth() + 1, 0).getDate();
             const getStartDayOfMonth = (m, y) => new Date(`${m} 1, ${y}`).getDay();
 
-            const totalPL = useMemo(() => {
+            // Auto-calculate Profit from current calendar month
+            const calendarMonthPL = useMemo(() => {
                 return data.reduce((sum, item) => {
                     const val = Number(item.pl);
                     return sum + (isNaN(val) ? 0 : val);
                 }, 0);
             }, [data]);
 
-            const currentBalance = useMemo(() => {
-                return Number(equity) + totalPL;
-            }, [equity, totalPL]);
+            // Sum of manual historical entries (past months)
+            const manualHistoryPL = useMemo(() => {
+                return Object.values(monthlyPL).reduce((a, b) => Number(a) + Number(b), 0);
+            }, [monthlyPL]);
 
-            const totalPercent = useMemo(() => {
-                const eq = Number(equity);
-                if (eq <= 0) return 0;
-                return (totalPL / eq) * 100;
-            }, [totalPL, equity]);
+            // TOTAL EQUITY CALCULATION: (Initial Capital + Manual Past P/L + Current Calendar P/L) - Withdrawals
+            const currentBalance = useMemo(() => {
+                return Number(equity) + manualHistoryPL + calendarMonthPL - Number(withdrawal);
+            }, [equity, manualHistoryPL, calendarMonthPL, withdrawal]);
+
+            // ROI CALCULATION: Based on Total Profit (Manual + Current)
+            const totalROI = useMemo(() => {
+                const initial = Number(equity);
+                if (initial <= 0) return 0;
+                return ((manualHistoryPL + calendarMonthPL) / initial) * 100;
+            }, [manualHistoryPL, calendarMonthPL, equity]);
 
             useEffect(() => {
                 const bg = document.getElementById('bg-animation');
@@ -213,16 +232,24 @@
                 if (cached) {
                     try {
                         const parsed = JSON.parse(cached);
-                        if (parsed.data) setData(parsed.data);
                         if (parsed.settings) {
                             setEquity(Number(parsed.settings.equity) || 1000);
+                            setWithdrawal(Number(parsed.settings.withdrawal) || 0);
                             setMonth(parsed.settings.month);
                             setYear(parsed.settings.year);
                             setCurrency(parsed.settings.currency);
                             setBroker(parsed.settings.broker);
-                            setInvId(parsed.settings.invId || '3061554');
-                            setInvServer(parsed.settings.invServer || 'ErranteSC-Real2');
-                            setInvPass(parsed.settings.invPass || 'Gold@123');
+                            setInvId(parsed.settings.invId);
+                            setInvServer(parsed.settings.invServer);
+                            setInvPass(parsed.settings.invPass);
+                            setMonthlyPL({
+                                janPL: parsed.settings.janPL || 0, febPL: parsed.settings.febPL || 0,
+                                marPL: parsed.settings.marPL || 0, aprPL: parsed.settings.aprPL || 0,
+                                mayPL: parsed.settings.mayPL || 0, junPL: parsed.settings.junPL || 0,
+                                julPL: parsed.settings.julPL || 0, augPL: parsed.settings.augPL || 0,
+                                sepPL: parsed.settings.sepPL || 0, octPL: parsed.settings.octPL || 0,
+                                novPL: parsed.settings.novPL || 0, decPL: parsed.settings.decPL || 0
+                            });
                         }
                     } catch (e) {}
                 }
@@ -271,6 +298,7 @@
                         if (result.settings) {
                             const s = result.settings;
                             setEquity(Number(s.equity) || 1000);
+                            setWithdrawal(Number(s.withdrawal) || 0);
                             setMonth(s.month || 'February');
                             setYear(parseInt(s.year) || 2025);
                             setCurrency(s.currency || 'USD');
@@ -278,6 +306,15 @@
                             setInvId(s.invId || '3061554');
                             setInvServer(s.invServer || 'ErranteSC-Real2');
                             setInvPass(s.invPass || 'Gold@123');
+                            const mData = {
+                                janPL: s.janPL || 0, febPL: s.febPL || 0, marPL: s.marPL || 0,
+                                aprPL: s.aprPL || 0, mayPL: s.mayPL || 0, junPL: s.junPL || 0,
+                                julPL: s.julPL || 0, augPL: s.augPL || 0, sepPL: s.sepPL || 0,
+                                octPL: s.octPL || 0, novPL: s.novPL || 0, decPL: s.decPL || 0
+                            };
+                            setMonthlyPL(mData);
+                            
+                            localStorage.setItem(CACHE_KEY, JSON.stringify({ settings: { ...s, ...mData } }));
                         }
                         setIsLoading(false);
                         setSyncStatus('LIVE');
@@ -318,14 +355,22 @@
 
             const handleSaveSettings = async () => {
                 const s = settingsForm;
-                const newSettings = { 
-                    equity: Number(s.equity), month: s.month, year: parseInt(s.year), currency: s.currency, broker: s.broker,
-                    invId: s.invId, invServer: s.invServer, invPass: s.invPass
-                };
-                setEquity(newSettings.equity); setMonth(newSettings.month); setYear(newSettings.year); setCurrency(newSettings.currency); setBroker(newSettings.broker);
-                setInvId(newSettings.invId); setInvServer(newSettings.invServer); setInvPass(newSettings.invPass);
                 setShowSettingsModal(false);
-                await sendToGas({ action: 'updateSettings', ...newSettings });
+                setEquity(Number(s.equity));
+                setWithdrawal(Number(s.withdrawal));
+                setMonth(s.month);
+                setYear(Number(s.year));
+                setCurrency(s.currency);
+                setBroker(s.broker);
+                setInvId(s.invId);
+                setInvServer(s.invServer);
+                setInvPass(s.invPass);
+                const newMonthly = {
+                    janPL: s.janPL, febPL: s.febPL, marPL: s.marPL, aprPL: s.aprPL, mayPL: s.mayPL, junPL: s.junPL,
+                    julPL: s.julPL, augPL: s.augPL, sepPL: s.sepPL, octPL: s.octPL, novPL: s.novPL, decPL: s.decPL
+                };
+                setMonthlyPL(newMonthly);
+                await sendToGas({ action: 'updateSettings', ...s });
             };
 
             const formatValue = (v) => {
@@ -365,7 +410,7 @@
                                         {(showAdminTrigger || isAdmin) && (
                                             <React.Fragment>
                                                 {isAdmin && (
-                                                    <button onClick={() => { setSettingsForm({ month, year, currency, equity, broker, invId, invServer, invPass }); setShowSettingsModal(true); }} className="p-2 rounded-xl bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all active:scale-90">⚙️</button>
+                                                    <button onClick={() => { setSettingsForm({ month, year, currency, equity, broker, invId, invServer, invPass, withdrawal, ...monthlyPL }); setShowSettingsModal(true); }} className="p-2 rounded-xl bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all active:scale-90">⚙️</button>
                                                 )}
                                                 <button onClick={() => isAdmin ? setIsAdmin(false) : setShowLoginModal(true)} className={`p-2 rounded-xl transition-all active:scale-90 ${isAdmin ? 'bg-[#ff3b69]/20 text-[#ff3b69]' : 'bg-white/5 text-zinc-400 hover:text-white'}`}>
                                                     {isAdmin ? '🔓' : '🔒'}
@@ -404,7 +449,7 @@
                                         <div className="flex justify-between items-center group cursor-pointer" onClick={() => copyToClipboard(invServer, "Server")}>
                                             <span className="text-[11px] text-zinc-600 font-bold uppercase tracking-widest">Server</span>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[13px] font-black text-white group-hover:text-[#00ffa3] transition-colors tracking-tight">{invServer}</span>
+                                                <span className="text-[13px] font-black text-white group-hover:text-[#00ffa3] transition-colors tracking-tight text-right">{invServer}</span>
                                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600 group-hover:text-[#00ffa3] transition-colors"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
                                             </div>
                                         </div>
@@ -418,7 +463,7 @@
                                     </div>
                                 </div>
 
-                                {/* EQUITY SECTION */}
+                                {/* TOTAL EQUITY SECTION (P/L AUTO CALCULATED) */}
                                 <div className="bg-[#1a1a1e]/50 rounded-3xl p-6 border border-white/5 group hover:border-[#00ffa3]/20 transition-all duration-500">
                                     <div className="flex justify-between items-center mb-1">
                                         <div className="text-[10px] uppercase text-zinc-500 font-black tracking-[0.2em]">Capital + Profit (Equity)</div>
@@ -427,7 +472,17 @@
                                     <div className="text-4xl font-black tracking-tighter text-white">
                                         {currentBalance.toLocaleString()} <span className="text-sm font-bold text-zinc-600 ml-1 uppercase">{currency}</span>
                                     </div>
-                                    <div className="w-full bg-zinc-900/50 h-[4px] mt-4 rounded-full overflow-hidden">
+                                    <div className="flex justify-between mt-2">
+                                        {Number(withdrawal) > 0 && (
+                                            <div className="text-[9px] font-bold text-[#ff3b69] uppercase tracking-wider">
+                                                - {Number(withdrawal).toLocaleString()} {currency} Withdrawn
+                                            </div>
+                                        )}
+                                        <div className="text-[9px] font-bold text-[#00ffa3] uppercase tracking-wider ml-auto">
+                                            Auto-Sync Active
+                                        </div>
+                                    </div>
+                                    <div className="w-full bg-zinc-900/50 h-[4px] mt-3 rounded-full overflow-hidden">
                                         <div className="bg-gradient-to-r from-[#00ffa3] to-transparent h-full animate-pulse" style={{width: '100%'}}></div>
                                     </div>
                                 </div>
@@ -441,16 +496,16 @@
                                     </div>
                                     <div className="bg-[#1a1a1e]/50 rounded-2xl p-4 border border-white/5">
                                         <div className="text-[9px] uppercase text-zinc-600 font-black mb-1 tracking-widest">{month.substring(0,3)} P/L</div>
-                                        <div className={`text-xl font-black ${totalPL >= 0 ? 'neon-green' : 'neon-red'}`}>
-                                            {formatValue(totalPL)}
+                                        <div className={`text-xl font-black ${calendarMonthPL >= 0 ? 'neon-green' : 'neon-red'}`}>
+                                            {formatValue(calendarMonthPL)}
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="bg-[#1a1a1e]/50 rounded-2xl p-4 border border-white/5 flex justify-between items-center">
-                                    <div className="text-[9px] uppercase text-zinc-600 font-black tracking-widest">Overall ROI</div>
-                                    <div className={`text-xl font-black ${totalPercent >= 0 ? 'neon-green' : 'neon-red'}`}>
-                                        {totalPercent.toFixed(2)}%
+                                    <div className="text-[9px] uppercase text-zinc-600 font-black tracking-widest">Annual ROI</div>
+                                    <div className={`text-xl font-black ${totalROI >= 0 ? 'neon-green' : 'neon-red'}`}>
+                                        {totalROI.toFixed(2)}%
                                     </div>
                                 </div>
 
@@ -499,12 +554,13 @@
                         </div>
                     </div>
 
+                    {/* LOGIN MODAL */}
                     {showLoginModal && (
                         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-5 z-[100] backdrop-blur-xl">
                             <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[320px] text-center shadow-2xl relative">
                                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00ffa3] to-transparent"></div>
                                 <div className="w-16 h-16 rounded-full bg-[#00ffa3]/10 flex items-center justify-center mx-auto mb-6 text-2xl">🔒</div>
-                                <h3 className="text-xl font-black mb-6 uppercase tracking-tighter">Authorize Terminal</h3>
+                                <h3 className="text-xl font-black mb-6 uppercase tracking-tighter text-white">Authorize Terminal</h3>
                                 <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (passwordInput === "admin123" ? (setIsAdmin(true), setShowLoginModal(false)) : setLoginError("AUTH_FAILED"))}
                                     className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none mb-2 text-center tracking-[0.5em] focus:border-[#00ffa3]" placeholder="••••••" autoFocus />
                                 {loginError && <p className="text-[#ff3b69] text-[10px] font-bold uppercase mb-4 tracking-widest">{loginError}</p>}
@@ -514,13 +570,14 @@
                         </div>
                     )}
 
+                    {/* DAILY EDIT MODAL */}
                     {editingItem && (
                         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-5 z-[100] backdrop-blur-xl">
                             <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[360px]">
-                                <h3 className="text-xl font-black mb-8 uppercase tracking-tighter text-white">Event Update: Day {editingItem.date}</h3>
-                                <div className="space-y-6 text-white">
+                                <h3 className="text-xl font-black mb-8 uppercase tracking-tighter text-white text-center">Day {editingItem.date} Entry</h3>
+                                <div className="space-y-6">
                                     <div>
-                                        <label className="text-zinc-600 text-[10px] font-black uppercase mb-2 block tracking-widest">Amount ({currency})</label>
+                                        <label className="text-zinc-600 text-[10px] font-black uppercase mb-2 block tracking-widest">P/L Amount ({currency})</label>
                                         <input type="number" value={editForm.pl} onChange={e => setEditForm({...editForm, pl: e.target.value, percent: e.target.value ? ((Number(e.target.value) / Number(equity)) * 100).toFixed(2) : ''})}
                                             className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none text-xl font-black focus:border-[#00ffa3]" placeholder="0.00" />
                                     </div>
@@ -531,55 +588,75 @@
                                     </div>
                                 </div>
                                 <div className="flex gap-4 mt-10">
-                                    <button onClick={() => setEditingItem(null)} className="flex-1 text-zinc-600 text-xs font-black uppercase tracking-widest">Cancel</button>
+                                    <button onClick={() => setEditingItem(null)} className="flex-1 text-zinc-600 text-xs font-black uppercase tracking-widest">Discard</button>
                                     <button onClick={handleSaveDay} className="flex-1 py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">Sync</button>
                                 </div>
                             </div>
                         </div>
                     )}
 
+                    {/* CONFIG MODAL */}
                     {showSettingsModal && (
                         <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-5 z-[100] backdrop-blur-xl">
-                            <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[400px] max-h-[90vh] overflow-y-auto no-scrollbar text-white">
+                            <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[440px] max-h-[90vh] overflow-y-auto no-scrollbar text-white">
                                 <h3 className="text-xl font-black mb-8 uppercase tracking-tighter text-center">Terminal Configuration</h3>
-                                <div className="space-y-4">
-                                    <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                                        <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest">Baseline Equity (Initial Capital)</label>
-                                        <input type="number" value={settingsForm.equity} onChange={e => setSettingsForm({...settingsForm, equity: e.target.value})} className="w-full bg-transparent text-white outline-none font-black text-lg" />
+                                <div className="space-y-6">
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                                            <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest text-white/50">Initial Capital</label>
+                                            <input type="number" value={settingsForm.equity} onChange={e => setSettingsForm({...settingsForm, equity: e.target.value})} className="w-full bg-transparent text-white outline-none font-black text-lg" />
+                                        </div>
+                                        <div className="bg-[#ff3b69]/5 p-4 rounded-2xl border border-[#ff3b69]/20">
+                                            <label className="text-[#ff3b69] text-[9px] font-black uppercase mb-1 block tracking-widest">Withdrawals</label>
+                                            <input type="number" value={settingsForm.withdrawal} onChange={e => setSettingsForm({...settingsForm, withdrawal: e.target.value})} className="w-full bg-transparent text-white outline-none font-black text-lg" />
+                                        </div>
                                     </div>
-                                    <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                                        <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest">Broker Context</label>
-                                        <input type="text" value={settingsForm.broker} onChange={e => setSettingsForm({...settingsForm, broker: e.target.value})} className="w-full bg-transparent text-white outline-none font-black text-lg" />
+
+                                    <div className="p-4 rounded-2xl border border-white/5 bg-white/[0.02]">
+                                        <label className="text-zinc-500 text-[9px] font-black uppercase mb-4 block tracking-[0.2em]">Historical P/L Ledger (Manual)</label>
+                                        <p className="text-[8px] text-zinc-600 uppercase mb-3">*Fill for past months only. Current month will auto-calculate.</p>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            {['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'].map(m => (
+                                                <div key={m} className="space-y-1">
+                                                    <span className="text-[8px] font-black uppercase text-zinc-600">{m} P/L</span>
+                                                    <input 
+                                                        type="number" 
+                                                        value={settingsForm[m + 'PL']} 
+                                                        onChange={e => setSettingsForm({...settingsForm, [m + 'PL']: e.target.value})} 
+                                                        className="w-full bg-black/40 text-white p-2 rounded-lg border border-white/5 outline-none text-xs font-bold focus:border-[#00ffa3]" 
+                                                    />
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                    
-                                    <div className="p-4 rounded-2xl border border-[#00ffa3]/20 bg-[#00ffa3]/5">
-                                        <label className="text-[#00ffa3] text-[9px] font-black uppercase mb-3 block tracking-widest">Investor Credentials</label>
-                                        <div className="space-y-3">
-                                            <input type="text" placeholder="Investor ID" value={settingsForm.invId} onChange={e => setSettingsForm({...settingsForm, invId: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none text-sm font-bold" />
+
+                                    <div className="space-y-3">
+                                        <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                                            <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest text-zinc-400">Broker Name</label>
+                                            <input type="text" value={settingsForm.broker} onChange={e => setSettingsForm({...settingsForm, broker: e.target.value})} className="w-full bg-transparent text-white outline-none font-black text-base" />
+                                        </div>
+                                        <div className="p-4 rounded-2xl border border-[#00ffa3]/20 bg-[#00ffa3]/5 space-y-3">
+                                            <label className="text-[#00ffa3] text-[9px] font-black uppercase block tracking-widest">Investor Credentials</label>
+                                            <input type="text" placeholder="ID" value={settingsForm.invId} onChange={e => setSettingsForm({...settingsForm, invId: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none text-sm font-bold" />
                                             <input type="text" placeholder="Server" value={settingsForm.invServer} onChange={e => setSettingsForm({...settingsForm, invServer: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none text-sm font-bold" />
                                             <input type="text" placeholder="Password" value={settingsForm.invPass} onChange={e => setSettingsForm({...settingsForm, invPass: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none text-sm font-bold" />
                                         </div>
                                     </div>
-
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                                            <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest">Period</label>
+                                            <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest text-zinc-400">Display Month</label>
                                             <select value={settingsForm.month} onChange={e => setSettingsForm({...settingsForm, month: e.target.value})} className="w-full bg-transparent text-white outline-none text-[11px] font-black uppercase appearance-none">
                                                 {["January","February","March","April","May","June","July","August","September","October","November","December"].map(m => <option key={m} value={m} className="bg-[#16161a]">{m}</option>)}
                                             </select>
                                         </div>
                                         <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                                            <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest">Cycle Year</label>
+                                            <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest text-zinc-400">Year</label>
                                             <input type="number" value={settingsForm.year} onChange={e => setSettingsForm({...settingsForm, year: e.target.value})} className="w-full bg-transparent text-white outline-none font-black text-lg" />
                                         </div>
                                     </div>
-                                    <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                                        <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest">Base Currency</label>
-                                        <input type="text" value={settingsForm.currency} onChange={e => setSettingsForm({...settingsForm, currency: e.target.value})} className="w-full bg-transparent text-white outline-none font-black text-lg uppercase" />
-                                    </div>
                                 </div>
-                                <div className="flex gap-4 mt-8">
-                                    <button onClick={() => setShowSettingsModal(false)} className="flex-1 text-zinc-600 text-xs font-black uppercase tracking-widest">Abort</button>
+                                <div className="flex gap-4 mt-8 pb-4">
+                                    <button onClick={() => setShowSettingsModal(false)} className="flex-1 text-zinc-600 text-xs font-black uppercase tracking-widest">Close</button>
                                     <button onClick={handleSaveSettings} className="flex-1 py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">Apply</button>
                                 </div>
                             </div>
