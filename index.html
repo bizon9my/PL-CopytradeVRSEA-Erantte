@@ -1,15 +1,15 @@
 <!DOCTYPE html>
-<html lang="ms">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VRS EA Terminal - Laporan Prestasi</title>
+    <title>VRS EA Terminal - Performance Report</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel untuk JSX -->
+    <!-- Babel for JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -24,7 +24,6 @@
         .neon-green { color: #00ffa3; filter: drop-shadow(0 0 8px rgba(0, 255, 163, 0.4)); }
         .neon-red { color: #ff3b69; filter: drop-shadow(0 0 8px rgba(255, 59, 105, 0.4)); }
         
-        /* Animasi Latar Belakang Trading */
         .trading-bg {
             position: fixed;
             top: 0; left: 0; width: 100%; height: 100%;
@@ -51,7 +50,6 @@
             to { transform: translateY(-110vh); }
         }
 
-        /* Scanning Line Effect */
         .scanline {
             width: 100%;
             height: 100px;
@@ -68,7 +66,6 @@
             100% { top: 100vh; }
         }
 
-        /* Ticker Animation */
         .ticker-wrap {
             width: 100%;
             overflow: hidden;
@@ -94,6 +91,26 @@
             backdrop-filter: blur(15px);
             border: 1px solid rgba(255, 255, 255, 0.06);
         }
+
+        .copy-toast {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #00ffa3;
+            color: black;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: 800;
+            font-size: 12px;
+            z-index: 1000;
+            animation: slideUp 0.3s ease-out;
+        }
+
+        @keyframes slideUp {
+            from { transform: translate(-50%, 20px); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
+        }
     </style>
 </head>
 <body>
@@ -104,7 +121,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo, useRef } = React;
 
-        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyScZPgtCs_XlRkYNxfz9iMVWHD_hRrZlkWGQZuE_biAKLFeqwxC4OvA_mDsDh9MAoD/exec";
+        const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzfzm6StGml9bnxQkHz-js8wLN8SKA1RL78IZIP4s9TUxX44DD5KvuDk6eWL58-c3F2/exec";
         const CACHE_KEY = "vrs_terminal_cache_v1";
         const LOGO_URL = "https://i.postimg.cc/Jz4PC4jG/CANVA-RK-PRO-(11).png";
 
@@ -131,6 +148,7 @@
             const [loginError, setLoginError] = useState('');
             const [editingItem, setEditingItem] = useState(null);
             const [editForm, setEditForm] = useState({ pl: '', percent: '' });
+            const [toast, setToast] = useState('');
             
             const [equity, setEquity] = useState(1000);
             const [month, setMonth] = useState('February');
@@ -138,13 +156,19 @@
             const [currency, setCurrency] = useState('USD');
             const [broker, setBroker] = useState('VRS Broker');
             
+            const [invId, setInvId] = useState('3061554');
+            const [invServer, setInvServer] = useState('ErranteSC-Real2');
+            const [invPass, setInvPass] = useState('Gold@123');
+            
             const [showSettingsModal, setShowSettingsModal] = useState(false);
-            const [settingsForm, setSettingsForm] = useState({ month: 'February', year: 2025, currency: 'USD', equity: 1000, broker: 'VRS Broker' });
+            const [settingsForm, setSettingsForm] = useState({ 
+                month: 'February', year: 2025, currency: 'USD', equity: 1000, broker: 'VRS Broker',
+                invId: '3061554', invServer: 'ErranteSC-Real2', invPass: 'Gold@123'
+            });
             
             const [isLoading, setIsLoading] = useState(false);
             const [syncStatus, setSyncStatus] = useState('');
 
-            // State untuk fungsi rahsia
             const [clickCount, setClickCount] = useState(0);
             const [showAdminTrigger, setShowAdminTrigger] = useState(false);
             const timerRef = useRef(null);
@@ -160,6 +184,10 @@
                     return sum + (isNaN(val) ? 0 : val);
                 }, 0);
             }, [data]);
+
+            const currentBalance = useMemo(() => {
+                return Number(equity) + totalPL;
+            }, [equity, totalPL]);
 
             const totalPercent = useMemo(() => {
                 const eq = Number(equity);
@@ -192,42 +220,37 @@
                             setYear(parsed.settings.year);
                             setCurrency(parsed.settings.currency);
                             setBroker(parsed.settings.broker);
+                            setInvId(parsed.settings.invId || '3061554');
+                            setInvServer(parsed.settings.invServer || 'ErranteSC-Real2');
+                            setInvPass(parsed.settings.invPass || 'Gold@123');
                         }
                     } catch (e) {}
                 }
                 fetchData(); 
             }, []);
 
-            // Logik rahsia apabila logo diklik
+            const copyToClipboard = (text, label) => {
+                const textField = document.createElement('textarea');
+                textField.innerText = text;
+                document.body.appendChild(textField);
+                textField.select();
+                document.execCommand('copy');
+                textField.remove();
+                setToast(`${label} copied!`);
+                setTimeout(() => setToast(''), 2000);
+            };
+
             const handleLogoClick = () => {
                 const newCount = clickCount + 1;
                 setClickCount(newCount);
-
-                // Reset timer setiap kali klik
                 if (timerRef.current) clearTimeout(timerRef.current);
-
                 if (newCount === 3) {
                     setShowAdminTrigger(true);
                     setClickCount(0);
-                    // Sembunyikan semula butang selepas 10 saat jika tidak dilog masuk
-                    setTimeout(() => {
-                        if (!isAdmin) setShowAdminTrigger(false);
-                    }, 10000);
+                    setTimeout(() => { if (!isAdmin) setShowAdminTrigger(false); }, 10000);
                 } else {
-                    // Jika tidak klik lagi dalam masa 1 saat, reset pembilang
-                    timerRef.current = setTimeout(() => {
-                        setClickCount(0);
-                    }, 1000);
+                    timerRef.current = setTimeout(() => { setClickCount(0); }, 1000);
                 }
-            };
-
-            const updateCache = (newData, newSettings) => {
-                const cacheData = {
-                    data: newData || data,
-                    settings: newSettings || { equity, month, year, currency, broker },
-                    lastUpdated: new Date().getTime()
-                };
-                localStorage.setItem(CACHE_KEY, JSON.stringify(cacheData));
             };
 
             const fetchData = () => {
@@ -236,36 +259,26 @@
                 fetch(SCRIPT_URL + "?timestamp=" + new Date().getTime())
                     .then(res => res.json())
                     .then(result => {
-                        let updatedData = data;
-                        let updatedSettings = { equity, month, year, currency, broker };
-
                         if (result.data) {
-                            updatedData = result.data
-                                .filter(i => i.date)
-                                .map(item => ({
-                                    ...item,
-                                    date: Number(item.date),
-                                    pl: item.pl === "" || item.pl === null ? null : Number(item.pl),
-                                    percent: item.percent === "" || item.percent === null ? null : Number(item.percent)
-                                }))
-                                .sort((a, b) => a.date - b.date);
+                            const updatedData = result.data.filter(i => i.date).map(item => ({
+                                ...item,
+                                date: Number(item.date),
+                                pl: item.pl === "" || item.pl === null ? null : Number(item.pl),
+                                percent: item.percent === "" || item.percent === null ? null : Number(item.percent)
+                            })).sort((a, b) => a.date - b.date);
                             setData(updatedData);
                         }
                         if (result.settings) {
-                            updatedSettings = {
-                                equity: Number(result.settings.equity) || 1000,
-                                month: result.settings.month || 'February',
-                                year: parseInt(result.settings.year) || 2025,
-                                currency: result.settings.currency || 'USD',
-                                broker: result.settings.broker || 'VRS Broker'
-                            };
-                            setEquity(updatedSettings.equity);
-                            setMonth(updatedSettings.month);
-                            setYear(updatedSettings.year);
-                            setCurrency(updatedSettings.currency);
-                            setBroker(updatedSettings.broker);
+                            const s = result.settings;
+                            setEquity(Number(s.equity) || 1000);
+                            setMonth(s.month || 'February');
+                            setYear(parseInt(s.year) || 2025);
+                            setCurrency(s.currency || 'USD');
+                            setBroker(s.broker || 'VRS Broker');
+                            setInvId(s.invId || '3061554');
+                            setInvServer(s.invServer || 'ErranteSC-Real2');
+                            setInvPass(s.invPass || 'Gold@123');
                         }
-                        updateCache(updatedData, updatedSettings);
                         setIsLoading(false);
                         setSyncStatus('LIVE');
                         setTimeout(() => setSyncStatus(''), 3000);
@@ -299,16 +312,18 @@
                 const pctVal = editForm.percent === '' ? null : Number(editForm.percent);
                 const newData = data.map(d => d.date === editingItem.date ? { ...d, pl: plVal, percent: pctVal } : d);
                 setData(newData);
-                updateCache(newData, null);
                 setEditingItem(null);
                 await sendToGas({ action: 'updateDay', date: editingItem.date, pl: plVal, percent: pctVal });
             };
 
             const handleSaveSettings = async () => {
                 const s = settingsForm;
-                const newSettings = { equity: Number(s.equity), month: s.month, year: parseInt(s.year), currency: s.currency, broker: s.broker };
+                const newSettings = { 
+                    equity: Number(s.equity), month: s.month, year: parseInt(s.year), currency: s.currency, broker: s.broker,
+                    invId: s.invId, invServer: s.invServer, invPass: s.invPass
+                };
                 setEquity(newSettings.equity); setMonth(newSettings.month); setYear(newSettings.year); setCurrency(newSettings.currency); setBroker(newSettings.broker);
-                updateCache(null, newSettings);
+                setInvId(newSettings.invId); setInvServer(newSettings.invServer); setInvPass(newSettings.invPass);
                 setShowSettingsModal(false);
                 await sendToGas({ action: 'updateSettings', ...newSettings });
             };
@@ -332,13 +347,14 @@
             }, [data, month, year]);
 
             return (
-                <div className="min-h-screen flex flex-col items-center relative overflow-hidden">
+                <div className="min-h-screen flex flex-col items-center relative overflow-hidden text-white">
                     <MarketTicker />
                     
+                    {toast && <div className="copy-toast no-select">{toast}</div>}
+
                     <div className="w-full max-w-[480px] p-3 sm:p-6 pb-20">
                         <div className="glass-panel w-full rounded-[24px] sm:rounded-[40px] overflow-hidden shadow-[0_32px_80px_-20px_rgba(0,0,0,0.9)] relative z-10">
                             
-                            {/* Header */}
                             <div className="bg-[#16161a]/60 p-5 sm:p-8 border-b border-white/5">
                                 <div className="flex justify-between items-center mb-6">
                                     <div className="flex items-center gap-2">
@@ -346,11 +362,10 @@
                                         <span className="text-[10px] uppercase tracking-[0.2em] text-zinc-500 font-black">Secure Terminal</span>
                                     </div>
                                     <div className="flex gap-2">
-                                        {/* Butang Admin yang disembunyikan (Hanya muncul jika trigger aktif atau sudah login) */}
                                         {(showAdminTrigger || isAdmin) && (
                                             <React.Fragment>
                                                 {isAdmin && (
-                                                    <button onClick={() => { setSettingsForm({ month, year, currency, equity, broker }); setShowSettingsModal(true); }} className="p-2 rounded-xl bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all active:scale-90">⚙️</button>
+                                                    <button onClick={() => { setSettingsForm({ month, year, currency, equity, broker, invId, invServer, invPass }); setShowSettingsModal(true); }} className="p-2 rounded-xl bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all active:scale-90">⚙️</button>
                                                 )}
                                                 <button onClick={() => isAdmin ? setIsAdmin(false) : setShowLoginModal(true)} className={`p-2 rounded-xl transition-all active:scale-90 ${isAdmin ? 'bg-[#ff3b69]/20 text-[#ff3b69]' : 'bg-white/5 text-zinc-400 hover:text-white'}`}>
                                                     {isAdmin ? '🔓' : '🔒'}
@@ -361,55 +376,85 @@
                                 </div>
                                 
                                 <div className="flex flex-col items-center text-center">
-                                    {/* Logo sebagai Trigger Triple Tap */}
-                                    <img 
-                                        src={LOGO_URL} 
-                                        alt="Logo" 
-                                        onClick={handleLogoClick}
-                                        className="h-14 sm:h-20 w-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(0,255,163,0.2)] active:scale-95 transition-transform cursor-pointer no-select" 
-                                    />
-                                    <h1 className="text-xl sm:text-2xl font-black bg-gradient-to-b from-white to-zinc-500 bg-clip-text text-transparent uppercase tracking-tight leading-tight">Laporan Prestasi Harian</h1>
+                                    <img src={LOGO_URL} alt="Logo" onClick={handleLogoClick} className="h-14 sm:h-20 w-auto mb-4 object-contain drop-shadow-[0_0_20px_rgba(0,255,163,0.2)] active:scale-95 transition-transform cursor-pointer no-select" />
+                                    <h1 className="text-xl sm:text-2xl font-black bg-gradient-to-b from-white to-zinc-500 bg-clip-text text-transparent uppercase tracking-tight leading-tight">Performance Report</h1>
                                     <div className="mt-3 flex items-center gap-2">
-                                        <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">Broker</span>
+                                        <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">Broker Context</span>
                                         <span className="text-[10px] text-[#00ffa3] font-black tracking-widest bg-[#00ffa3]/5 px-4 py-1 rounded-full border border-[#00ffa3]/10">{broker}</span>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Stats */}
-                            <div className="p-5 sm:p-8 space-y-4">
-                                <div className="bg-[#1a1a1e]/50 rounded-2xl p-5 border border-white/5 group hover:border-[#00ffa3]/20 transition-all duration-500">
+                            <div className="p-5 sm:p-8 space-y-5">
+                                
+                                {/* INVESTOR ACCESS */}
+                                <div className="bg-black/40 rounded-2xl p-4 border border-white/5 border-dashed relative overflow-hidden">
+                                    <div className="text-[10px] uppercase text-zinc-500 font-black tracking-[0.2em] mb-4 flex items-center gap-2">
+                                        <span className="w-2 h-2 bg-[#00ffa3] rounded-full shadow-[0_0_5px_#00ffa3]"></span>
+                                        Investor Credentials (Read-Only)
+                                    </div>
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center group cursor-pointer" onClick={() => copyToClipboard(invId, "Login ID")}>
+                                            <span className="text-[11px] text-zinc-600 font-bold uppercase tracking-widest">Login ID</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[13px] font-black text-white group-hover:text-[#00ffa3] transition-colors tracking-widest">{invId}</span>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600 group-hover:text-[#00ffa3] transition-colors"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between items-center group cursor-pointer" onClick={() => copyToClipboard(invServer, "Server")}>
+                                            <span className="text-[11px] text-zinc-600 font-bold uppercase tracking-widest">Server</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[13px] font-black text-white group-hover:text-[#00ffa3] transition-colors tracking-tight">{invServer}</span>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600 group-hover:text-[#00ffa3] transition-colors"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                            </div>
+                                        </div>
+                                        <div className="flex justify-between items-center group cursor-pointer" onClick={() => copyToClipboard(invPass, "Password")}>
+                                            <span className="text-[11px] text-zinc-600 font-bold uppercase tracking-widest">Password</span>
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-[13px] font-black text-white group-hover:text-[#00ffa3] transition-colors tracking-widest">{invPass}</span>
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600 group-hover:text-[#00ffa3] transition-colors"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* EQUITY SECTION */}
+                                <div className="bg-[#1a1a1e]/50 rounded-3xl p-6 border border-white/5 group hover:border-[#00ffa3]/20 transition-all duration-500">
                                     <div className="flex justify-between items-center mb-1">
-                                        <div className="text-[10px] uppercase text-zinc-500 font-black tracking-[0.2em]">Available Equity</div>
-                                        <div className="text-xl opacity-20">🏦</div>
+                                        <div className="text-[10px] uppercase text-zinc-500 font-black tracking-[0.2em]">Capital + Profit (Equity)</div>
+                                        <div className="text-xl opacity-30">💹</div>
                                     </div>
-                                    <div className="text-3xl font-black tracking-tighter text-white">
-                                        {Number(equity).toLocaleString()} <span className="text-sm font-bold text-zinc-600 ml-1 uppercase">{currency}</span>
+                                    <div className="text-4xl font-black tracking-tighter text-white">
+                                        {currentBalance.toLocaleString()} <span className="text-sm font-bold text-zinc-600 ml-1 uppercase">{currency}</span>
                                     </div>
-                                    <div className="w-full bg-zinc-900/50 h-[3px] mt-4 rounded-full overflow-hidden">
+                                    <div className="w-full bg-zinc-900/50 h-[4px] mt-4 rounded-full overflow-hidden">
                                         <div className="bg-gradient-to-r from-[#00ffa3] to-transparent h-full animate-pulse" style={{width: '100%'}}></div>
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="bg-[#1a1a1e]/50 rounded-2xl p-4 border border-white/5">
-                                        <div className="text-[9px] uppercase text-zinc-600 font-black mb-1 tracking-widest flex items-center gap-1.5">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-zinc-700"></span> Monthly P/L
-                                        </div>
-                                        <div className={`text-xl sm:text-2xl font-black ${totalPL >= 0 ? 'neon-green' : 'neon-red'}`}>
-                                            {formatValue(totalPL)}
+                                        <div className="text-[9px] uppercase text-zinc-600 font-black mb-1 tracking-widest">Initial Capital</div>
+                                        <div className="text-xl font-black text-white">
+                                            {Number(equity).toLocaleString()} <span className="text-[9px] font-bold text-zinc-600">{currency}</span>
                                         </div>
                                     </div>
                                     <div className="bg-[#1a1a1e]/50 rounded-2xl p-4 border border-white/5">
-                                        <div className="text-[9px] uppercase text-zinc-600 font-black mb-1 tracking-widest">Return ROI</div>
-                                        <div className={`text-xl sm:text-2xl font-black ${totalPercent >= 0 ? 'neon-green' : 'neon-red'}`}>
-                                            {formatValue(totalPercent)}%
+                                        <div className="text-[9px] uppercase text-zinc-600 font-black mb-1 tracking-widest">{month.substring(0,3)} P/L</div>
+                                        <div className={`text-xl font-black ${totalPL >= 0 ? 'neon-green' : 'neon-red'}`}>
+                                            {formatValue(totalPL)}
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Calendar Header */}
-                                <div className="flex justify-between items-center pt-6 px-1">
+                                <div className="bg-[#1a1a1e]/50 rounded-2xl p-4 border border-white/5 flex justify-between items-center">
+                                    <div className="text-[9px] uppercase text-zinc-600 font-black tracking-widest">Overall ROI</div>
+                                    <div className={`text-xl font-black ${totalPercent >= 0 ? 'neon-green' : 'neon-red'}`}>
+                                        {totalPercent.toFixed(2)}%
+                                    </div>
+                                </div>
+
+                                <div className="flex justify-between items-center pt-4 px-1 border-t border-white/5">
                                     <div className="text-[12px] font-black tracking-widest uppercase text-white flex items-center gap-2">
                                         <span className="w-3 h-[2px] bg-[#00ffa3]"></span>
                                         {month} {year}
@@ -419,18 +464,14 @@
                                     )}
                                 </div>
 
-                                {/* Calendar Container */}
-                                <div className="mt-4 no-select">
+                                <div className="mt-2 no-select">
                                     <div className="grid grid-cols-7 mb-4 text-center text-[10px] font-black text-zinc-700 uppercase tracking-tighter">
                                         {daysOfWeek.map(d => <div key={d} className="py-2">{d}</div>)}
                                     </div>
                                     <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
                                         {calendarGrid.map((item, i) => (
-                                            <div 
-                                                key={i} 
-                                                onClick={() => !item.isBlank && isAdmin && (setEditingItem(item), setEditForm({ pl: item.pl !== null ? item.pl : '', percent: item.percent !== null ? item.percent : '' }))}
-                                                className={`flex flex-col items-center justify-start py-2 px-1 min-h-[58px] sm:min-h-[66px] rounded-xl transition-all duration-300 border border-transparent ${!item.isBlank && isAdmin ? 'cursor-pointer hover:bg-[#00ffa3]/5 hover:border-[#00ffa3]/10 active:scale-90' : ''}`}
-                                            >
+                                            <div key={i} onClick={() => !item.isBlank && isAdmin && (setEditingItem(item), setEditForm({ pl: item.pl !== null ? item.pl : '', percent: item.percent !== null ? item.percent : '' }))}
+                                                className={`flex flex-col items-center justify-start py-2 px-1 min-h-[58px] sm:min-h-[66px] rounded-xl transition-all duration-300 border border-transparent ${!item.isBlank && isAdmin ? 'cursor-pointer hover:bg-[#00ffa3]/5 hover:border-[#00ffa3]/10 active:scale-90' : ''}`}>
                                                 {!item.isBlank && (
                                                     <>
                                                         <span className={`text-[12px] sm:text-[14px] font-bold mb-1 ${item.pl !== null ? 'text-zinc-100' : 'text-zinc-800'}`}>{item.date}</span>
@@ -458,27 +499,26 @@
                         </div>
                     </div>
 
-                    {/* Modals */}
                     {showLoginModal && (
-                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-5 z-[100] backdrop-blur-2xl">
+                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-5 z-[100] backdrop-blur-xl">
                             <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[320px] text-center shadow-2xl relative">
                                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00ffa3] to-transparent"></div>
                                 <div className="w-16 h-16 rounded-full bg-[#00ffa3]/10 flex items-center justify-center mx-auto mb-6 text-2xl">🔒</div>
                                 <h3 className="text-xl font-black mb-6 uppercase tracking-tighter">Authorize Terminal</h3>
-                                <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (passwordInput === "admin123" ? (setIsAdmin(true), setShowLoginModal(false)) : setLoginError("INVALID_KEY"))}
+                                <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (passwordInput === "admin123" ? (setIsAdmin(true), setShowLoginModal(false)) : setLoginError("AUTH_FAILED"))}
                                     className="w-full bg-black/40 text-white p-4 rounded-2xl border border-white/5 outline-none mb-2 text-center tracking-[0.5em] focus:border-[#00ffa3]" placeholder="••••••" autoFocus />
                                 {loginError && <p className="text-[#ff3b69] text-[10px] font-bold uppercase mb-4 tracking-widest">{loginError}</p>}
-                                <button onClick={() => passwordInput === "admin123" ? (setIsAdmin(true), setShowLoginModal(false)) : setLoginError("INVALID_KEY")} className="w-full py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">Connect</button>
-                                <button onClick={() => { setShowLoginModal(false); setShowAdminTrigger(false); }} className="mt-4 text-zinc-600 text-[10px] font-bold uppercase hover:text-white">Discard</button>
+                                <button onClick={() => passwordInput === "admin123" ? (setIsAdmin(true), setShowLoginModal(false)) : setLoginError("AUTH_FAILED")} className="w-full py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">Connect</button>
+                                <button onClick={() => { setShowLoginModal(false); setShowAdminTrigger(false); }} className="mt-4 text-zinc-600 text-[10px] font-bold uppercase hover:text-white">Cancel</button>
                             </div>
                         </div>
                     )}
 
                     {editingItem && (
-                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-5 z-[100] backdrop-blur-2xl">
+                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-5 z-[100] backdrop-blur-xl">
                             <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[360px]">
-                                <h3 className="text-xl font-black mb-8 uppercase tracking-tighter">Event Update: Day {editingItem.date}</h3>
-                                <div className="space-y-6">
+                                <h3 className="text-xl font-black mb-8 uppercase tracking-tighter text-white">Event Update: Day {editingItem.date}</h3>
+                                <div className="space-y-6 text-white">
                                     <div>
                                         <label className="text-zinc-600 text-[10px] font-black uppercase mb-2 block tracking-widest">Amount ({currency})</label>
                                         <input type="number" value={editForm.pl} onChange={e => setEditForm({...editForm, pl: e.target.value, percent: e.target.value ? ((Number(e.target.value) / Number(equity)) * 100).toFixed(2) : ''})}
@@ -499,18 +539,28 @@
                     )}
 
                     {showSettingsModal && (
-                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-5 z-[100] backdrop-blur-2xl">
-                            <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[380px]">
-                                <h3 className="text-xl font-black mb-8 uppercase tracking-tighter">Config Node</h3>
+                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-5 z-[100] backdrop-blur-xl">
+                            <div className="bg-[#16161a] p-8 rounded-[32px] border border-white/10 w-full max-w-[400px] max-h-[90vh] overflow-y-auto no-scrollbar text-white">
+                                <h3 className="text-xl font-black mb-8 uppercase tracking-tighter text-center">Terminal Configuration</h3>
                                 <div className="space-y-4">
                                     <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                                        <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest">Baseline Equity</label>
+                                        <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest">Baseline Equity (Initial Capital)</label>
                                         <input type="number" value={settingsForm.equity} onChange={e => setSettingsForm({...settingsForm, equity: e.target.value})} className="w-full bg-transparent text-white outline-none font-black text-lg" />
                                     </div>
                                     <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                                        <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest">Broker ID</label>
+                                        <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest">Broker Context</label>
                                         <input type="text" value={settingsForm.broker} onChange={e => setSettingsForm({...settingsForm, broker: e.target.value})} className="w-full bg-transparent text-white outline-none font-black text-lg" />
                                     </div>
+                                    
+                                    <div className="p-4 rounded-2xl border border-[#00ffa3]/20 bg-[#00ffa3]/5">
+                                        <label className="text-[#00ffa3] text-[9px] font-black uppercase mb-3 block tracking-widest">Investor Credentials</label>
+                                        <div className="space-y-3">
+                                            <input type="text" placeholder="Investor ID" value={settingsForm.invId} onChange={e => setSettingsForm({...settingsForm, invId: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none text-sm font-bold" />
+                                            <input type="text" placeholder="Server" value={settingsForm.invServer} onChange={e => setSettingsForm({...settingsForm, invServer: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none text-sm font-bold" />
+                                            <input type="text" placeholder="Password" value={settingsForm.invPass} onChange={e => setSettingsForm({...settingsForm, invPass: e.target.value})} className="w-full bg-black/40 text-white p-3 rounded-xl border border-white/5 outline-none text-sm font-bold" />
+                                        </div>
+                                    </div>
+
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
                                             <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest">Period</label>
@@ -523,10 +573,14 @@
                                             <input type="number" value={settingsForm.year} onChange={e => setSettingsForm({...settingsForm, year: e.target.value})} className="w-full bg-transparent text-white outline-none font-black text-lg" />
                                         </div>
                                     </div>
+                                    <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                                        <label className="text-zinc-700 text-[9px] font-black uppercase mb-1 block tracking-widest">Base Currency</label>
+                                        <input type="text" value={settingsForm.currency} onChange={e => setSettingsForm({...settingsForm, currency: e.target.value})} className="w-full bg-transparent text-white outline-none font-black text-lg uppercase" />
+                                    </div>
                                 </div>
-                                <div className="flex gap-4 mt-10">
-                                    <button onClick={() => setShowSettingsModal(false)} className="flex-1 text-zinc-600 text-xs font-black uppercase tracking-widest">Close</button>
-                                    <button onClick={handleSaveSettings} className="flex-1 py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">Deploy</button>
+                                <div className="flex gap-4 mt-8">
+                                    <button onClick={() => setShowSettingsModal(false)} className="flex-1 text-zinc-600 text-xs font-black uppercase tracking-widest">Abort</button>
+                                    <button onClick={handleSaveSettings} className="flex-1 py-4 rounded-2xl bg-[#00ffa3] text-black font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">Apply</button>
                                 </div>
                             </div>
                         </div>
