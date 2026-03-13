@@ -9,7 +9,7 @@
     <!-- React & ReactDOM -->
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <!-- Babel for JSX -->
+    <!-- Babel untuk JSX -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -142,6 +142,28 @@
             background: rgba(0, 255, 163, 0.1);
             border-radius: 10px;
         }
+
+        /* Profit & Loss Animations */
+        .path-draw {
+            stroke-dasharray: 100;
+            stroke-dashoffset: 100;
+            animation: draw 2s ease-out forwards infinite;
+        }
+
+        @keyframes draw {
+            to {
+                stroke-dashoffset: 0;
+            }
+        }
+
+        .float-icon {
+            animation: floating 3s ease-in-out infinite;
+        }
+
+        @keyframes floating {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
     </style>
 </head>
 <body>
@@ -170,7 +192,6 @@
         };
 
         const App = () => {
-            // All States declared once at the top
             const [data, setData] = useState([]);
             const [isAdmin, setIsAdmin] = useState(false);
             const [showLoginModal, setShowLoginModal] = useState(false);
@@ -414,13 +435,15 @@
                             </div>
 
                             <div className="p-5 sm:p-9 space-y-6">
-                                <div className="bg-gradient-to-br from-[#1a1a22] to-[#0f0f12] rounded-[28px] p-7 border border-white/5 glow-pulse relative overflow-hidden shadow-2xl">
+                                {/* MAIN EQUITY CARD WITH PROFIT/LOSS ANIMATION */}
+                                <div className="bg-gradient-to-br from-[#1a1a22] to-[#0f0f12] rounded-[28px] p-7 border border-white/5 glow-pulse relative overflow-hidden shadow-2xl flex justify-between items-center">
                                     <div className="absolute top-[-20%] right-[-10%] w-40 h-40 bg-[#00ffa3]/5 blur-[60px] rounded-full"></div>
-                                    <div className="text-[10px] uppercase text-zinc-500 font-black tracking-[0.2em] mb-1 mono">Global Equity Balance</div>
-                                    <div className="text-3xl sm:text-4xl font-black tracking-tighter text-white mono mb-4">
-                                        {currentBalance.toLocaleString()} <span className="text-sm font-bold text-zinc-600">{currency}</span>
-                                    </div>
-                                    <div className="flex justify-between items-center">
+                                    
+                                    <div className="relative z-10 flex-1">
+                                        <div className="text-[10px] uppercase text-zinc-500 font-black tracking-[0.2em] mb-1 mono">Global Equity Balance</div>
+                                        <div className="text-3xl sm:text-4xl font-black tracking-tighter text-white mono mb-4">
+                                            {currentBalance.toLocaleString()} <span className="text-sm font-bold text-zinc-600">{currency}</span>
+                                        </div>
                                         <div className="flex gap-6">
                                             <div className="flex flex-col">
                                                 <span className="text-[9px] uppercase text-zinc-600 font-black tracking-widest">Win Rate</span>
@@ -431,9 +454,27 @@
                                                 <span className={`text-sm font-black mono ${totalROI >= 0 ? 'text-[#00ffa3]' : 'text-[#ff3b69]'}`}>{totalROI.toFixed(2)}%</span>
                                             </div>
                                         </div>
-                                        {Number(withdrawal) > 0 && (
-                                            <div className="px-3 py-1 bg-[#ff3b69]/10 rounded-lg border border-[#ff3b69]/20 text-[9px] font-black text-[#ff3b69] uppercase tracking-widest">
-                                                -{Number(withdrawal).toLocaleString()} Out
+                                    </div>
+
+                                    {/* DYNAMIC PROFIT/LOSS ANIMATION SIDE */}
+                                    <div className="relative z-20 w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">
+                                        {totalROI >= 0 ? (
+                                            /* PROFIT ANIMATION (UP TREND) */
+                                            <div className="float-icon">
+                                                <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M23 6L13.5 15.5L8.5 10.5L1 18" stroke="var(--neon-green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+                                                    <path d="M17 6H23V12" stroke="var(--neon-green)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+                                                </svg>
+                                                <div className="absolute inset-0 bg-[#00ffa3]/20 blur-xl rounded-full animate-pulse"></div>
+                                            </div>
+                                        ) : (
+                                            /* LOSS ANIMATION (DOWN TREND) */
+                                            <div className="float-icon">
+                                                <svg width="60" height="60" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                                    <path d="M23 18L13.5 8.5L8.5 13.5L1 6" stroke="var(--neon-red)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+                                                    <path d="M17 18H23V12" stroke="var(--neon-red)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="path-draw" />
+                                                </svg>
+                                                <div className="absolute inset-0 bg-[#ff3b69]/20 blur-xl rounded-full animate-pulse"></div>
                                             </div>
                                         )}
                                     </div>
@@ -526,10 +567,10 @@
 
                     {/* Authentication Modal */}
                     {showLoginModal && (
-                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-6 z-[100] backdrop-blur-xl">
-                            <div className="bg-[#16161a] p-10 rounded-[40px] border border-white/10 w-full max-w-[320px] text-center shadow-2xl relative text-white">
+                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-6 z-[100] backdrop-blur-xl text-white">
+                            <div className="bg-[#16161a] p-10 rounded-[40px] border border-white/10 w-full max-w-[320px] text-center shadow-2xl relative">
                                 <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-[#00ffa3] to-transparent"></div>
-                                <div className="w-16 h-16 rounded-3xl bg-[#00ffa3]/10 flex items-center justify-center mx-auto mb-8 text-xl border border-white/5 text-white">🔒</div>
+                                <div className="w-16 h-16 rounded-3xl bg-[#00ffa3]/10 flex items-center justify-center mx-auto mb-8 text-xl border border-white/5">🔒</div>
                                 <h3 className="text-xl font-black mb-8 uppercase tracking-tighter mono">Authenticate</h3>
                                 <input type="password" value={passwordInput} onChange={e => setPasswordInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && (passwordInput === "admin123" ? (setIsAdmin(true), setShowLoginModal(false)) : setLoginError("INVALID_KEY"))}
                                     className="w-full bg-black text-white p-5 rounded-2xl border border-white/5 outline-none mb-2 text-center tracking-[0.6em] focus:border-[#00ffa3] transition-all mono" placeholder="••••••" autoFocus />
@@ -542,8 +583,8 @@
 
                     {/* Daily Edit Modal */}
                     {editingItem && (
-                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-6 z-[100] backdrop-blur-xl">
-                            <div className="bg-[#16161a] p-8 rounded-[40px] border border-white/10 w-full max-w-[360px] text-white">
+                        <div className="fixed inset-0 bg-black/95 flex items-center justify-center p-6 z-[100] backdrop-blur-xl text-white">
+                            <div className="bg-[#16161a] p-8 rounded-[40px] border border-white/10 w-full max-w-[360px]">
                                 <h3 className="text-lg font-black mb-10 uppercase tracking-tighter mono">Update Day {editingItem.date}</h3>
                                 <div className="space-y-6">
                                     <input type="number" value={editForm.pl} onChange={e => setEditForm({...editForm, pl: e.target.value, percent: e.target.value ? ((Number(e.target.value) / (Number(equity) || 1)) * 100).toFixed(2) : ''})}
